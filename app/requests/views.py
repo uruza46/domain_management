@@ -1,9 +1,9 @@
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from django.views.decorators.http import require_POST
 
-from owners.models import Employee, ManagementUnit
+from domains.models import Brand, Company
+from owners.models import ManagementUnit
 
 from .models import DomainRequest, DomainRequestReview
 from .services import (
@@ -21,8 +21,6 @@ def request_list(request):
 
 @login_required
 def request_new(request):
-    from domains.models import Brand, Company
-
     if request.method == "POST":
         proposed_fqdn = request.POST.get("proposed_fqdn", "").strip()
         purpose = request.POST.get("purpose", "").strip()
@@ -45,8 +43,6 @@ def request_new(request):
         )
         initialize_reviews(req)
         return redirect("request_detail", pk=req.id)
-
-    from domains.models import Brand, Company
 
     return render(request, "requests/request_form.html", {
         "brands": Brand.objects.filter(is_active=True),
