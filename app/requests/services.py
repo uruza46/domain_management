@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.utils import timezone
 
 from domains.models import Domain
@@ -34,6 +35,7 @@ def check_and_gate_and_advance(request: DomainRequest) -> None:
         request.save(update_fields=["status", "updated_at"])
 
 
+@transaction.atomic
 def create_domain_from_request(
     request: DomainRequest,
     management_unit: ManagementUnit,
