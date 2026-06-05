@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}ログイン{% endblock %}
+
+{% block anonymous_content %}
+<div class="min-vh-100 d-flex align-items-center justify-content-center" style="background:#f5f7fa">
+  <div class="card border-0 shadow-sm" style="width:360px;border-radius:12px">
+    <div class="card-body p-4">
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <i class="bi bi-globe2 fs-3" style="color:#6366f1"></i>
+        <div>
+          <div class="fw-bold">Domain Management</div>
+          <div class="text-muted small">公開ドメイン管理</div>
+        </div>
+      </div>
+      <form method="post">
+        {% csrf_token %}
+        <div class="mb-3">
+          <label class="form-label small">ユーザー名</label>
+          <input type="text" name="username" class="form-control" autofocus required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small">パスワード</label>
+          <input type="password" name="password" class="form-control" required>
+        </div>
+        {% if form.errors %}
+        <div class="alert alert-danger small">ユーザー名またはパスワードが正しくありません。</div>
+        {% endif %}
+        <button type="submit" class="btn btn-primary w-100">ログイン</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,72 @@
+{% if results %}
+<div class="form-card">
+  <div class="d-flex gap-2 mb-3 flex-wrap">
+    <div class="px-3 py-2 rounded" style="background:#dcfce7;font-size:0.82rem">
+      <strong>{{ create_count }}</strong> 件 新規追加
+    </div>
+    <div class="px-3 py-2 rounded" style="background:#fef9c3;font-size:0.82rem">
+      <strong>{{ skip_count }}</strong> 件 スキップ（既存）
+    </div>
+    <div class="px-3 py-2 rounded" style="background:#fee2e2;font-size:0.82rem">
+      <strong>{{ error_count }}</strong> 件 エラー
+    </div>
+  </div>
+
+  <table class="table table-sm" style="font-size:0.82rem">
+    <thead style="background:#f8fafc">
+      <tr>
+        <th>FQDN</th>
+        {% if file_type == "zone" %}<th>レコード種別</th><th>値</th>{% endif %}
+        <th>操作</th>
+        <th>状態</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for result in results %}
+      <tr>
+        <td style="font-family:monospace">
+          {% if result.action == "error" %}
+            <span class="text-danger">{{ result.fqdn }}</span>
+          {% else %}
+            {{ result.fqdn }}
+          {% endif %}
+        </td>
+        {% if file_type == "zone" %}
+        <td>{{ result.record_type|default:"-" }}</td>
+        <td style="font-size:0.75rem;max-width:240px;overflow:hidden;text-overflow:ellipsis">
+          {{ result.record_value|default:"-" }}
+        </td>
+        {% endif %}
+        <td>
+          {% if result.action == "create" %}新規追加
+          {% elif result.action == "skip" %}スキップ
+          {% else %}-{% endif %}
+        </td>
+        <td>
+          {% if result.action == "create" %}
+            <span class="badge" style="background:#dcfce7;color:#15803d">OK</span>
+          {% elif result.action == "skip" %}
+            <span class="badge" style="background:#fef9c3;color:#92400e">SKIP</span>
+          {% else %}
+            <span class="badge" style="background:#fee2e2;color:#dc2626" title="{{ result.error_message }}">ERROR</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if create_count > 0 %}
+  <form method="post" action="{% url 'import_commit' %}">
+    {% csrf_token %}
+    <input type="hidden" name="management_unit_id" value="">
+    <div class="d-flex justify-content-end gap-2 mt-3">
+      <a href="{% url 'import_form' %}" class="btn btn-outline-secondary btn-sm">キャンセル</a>
+      <button type="submit" class="btn btn-primary btn-sm">
+        <i class="bi bi-check2-circle me-1"></i>エラー以外を登録する（{{ create_count }} 件）
+      </button>
+    </div>
+  </form>
+  {% endif %}
+</div>
+{% endif %}

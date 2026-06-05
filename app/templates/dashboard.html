@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}ダッシュボード{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h1 class="page-title">ダッシュボード</h1>
+  <div class="text-muted small">公開ドメイン管理の初期トップ画面</div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="stat-value">{{ managed_count }}</div>
+      <div class="stat-label">管理対象ドメイン</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="stat-value">{{ individual_count }}</div>
+      <div class="stat-label">個別管理対象</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="stat-value">{{ expiring_count }}</div>
+      <div class="stat-label">更新期限接近</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="stat-value">{{ inventory_unanswered_count }}</div>
+      <div class="stat-label">未回答棚卸</div>
+    </div>
+  </div>
+</div>
+
+<div class="form-card">
+  <div class="d-flex align-items-center gap-2 mb-2">
+    <span class="status-badge status-ok"><i class="bi bi-check2-circle"></i>DP1</span>
+    <strong>基盤準備中</strong>
+  </div>
+  <div class="text-muted small">
+    DP2でドメイン台帳一覧、詳細、登録・編集、CSV取込を追加します。
+  </div>
+</div>
+{% endblock %}

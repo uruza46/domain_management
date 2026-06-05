@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}名前空間管理{% endblock %}
+{% block nav_namespaces %}active{% endblock %}
+
+{% block content %}
+<div class="mb-4 d-flex align-items-center justify-content-between">
+  <div>
+    <h1 class="page-title">名前空間管理</h1>
+    <div class="text-muted small">管理単位とドメインを名前空間順に表示</div>
+  </div>
+  <div class="btn-group btn-group-sm" role="group" aria-label="view switcher">
+    <a href="?view=list"
+       class="btn {% if view_mode == 'list' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+      <i class="bi bi-list-ul me-1"></i>一覧
+    </a>
+    <a href="?view=reverse"
+       class="btn {% if view_mode == 'reverse' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+      <i class="bi bi-sort-alpha-down me-1"></i>逆ラベル
+    </a>
+  </div>
+</div>
+
+<div class="form-card">
+  <table class="table table-sm mb-0" style="font-size:0.85rem">
+    <thead style="background:#f8fafc">
+      <tr>
+        <th style="width:40%">{% if view_mode == 'reverse' %}逆ラベル{% else %}FQDN{% endif %}</th>
+        <th style="width:15%">種別</th>
+        <th style="width:15%">管理区分</th>
+        <th style="width:20%">管理部署 / 担当者</th>
+        <th style="width:10%"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr data-fqdn-reversed="{{ item.fqdn_reversed }}">
+        <td style="font-family:monospace">
+          {% if view_mode == 'reverse' %}
+            <span class="text-muted">{{ item.grey_prefix }}</span><strong>{{ item.bold_suffix }}</strong>
+          {% else %}
+            {% if item.kind == 'unit' %}
+              <strong style="color:#6d28d9">{{ item.fqdn }}</strong>
+            {% else %}
+              {{ item.fqdn }}
+            {% endif %}
+          {% endif %}
+        </td>
+        <td>
+          <span class="badge"
+                style="{% if item.kind == 'unit' %}background:#ede9fe;color:#7c3aed{% else %}background:#f1f5f9;color:#64748b{% endif %}">
+            {{ item.unit_type_display }}
+          </span>
+        </td>
+        <td>
+          <span class="badge" style="background:#f1f5f9;color:#64748b;font-size:0.72rem">
+            {{ item.setting_type }}
+          </span>
+        </td>
+        <td class="text-muted small">
+          {% if item.mgmt_dept %}{{ item.mgmt_dept }}{% endif %}
+          {% if item.primary_owner %} / {{ item.primary_owner }}{% endif %}
+        </td>
+        <td>
+          {% if item.kind == 'unit' %}
+            <a href="#" class="text-primary small">編集</a>
+          {% else %}
+            <a href="#" class="text-secondary small">詳細</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="text-center text-muted py-4">データがありません</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

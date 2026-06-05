@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}ファイル取り込み{% endblock %}
+
+{% block content %}
+<div class="mb-4 d-flex align-items-center justify-content-between">
+  <div>
+    <h1 class="page-title">ファイル取り込み</h1>
+    <div class="text-muted small">DNS ゾーンファイルまたはドメインリスト CSV を取り込みます</div>
+  </div>
+  <a href="{% url 'namespace_list' %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-diagram-3 me-1"></i>名前空間管理
+  </a>
+</div>
+
+<div class="form-card" style="max-width:640px">
+  <form id="import-form"
+        hx-post="{% url 'import_preview' %}"
+        hx-target="#preview-section"
+        hx-encoding="multipart/form-data">
+    {% csrf_token %}
+
+    <div class="mb-3">
+      <label class="form-label small fw-bold">ファイル種別</label>
+      <select name="file_type"
+              class="form-select"
+              id="file-type-select"
+              onchange="document.getElementById('zone-origin').style.display=this.value==='zone'?'block':'none'">
+        <option value="csv">ドメインリスト CSV</option>
+        <option value="zone">DNS ゾーンファイル（BIND 形式）</option>
+      </select>
+    </div>
+
+    <div class="mb-3" id="zone-origin" style="display:none">
+      <label class="form-label small fw-bold">ゾーンオリジン</label>
+      <input type="text" name="origin" class="form-control" placeholder="example.co.jp">
+      <div class="form-text">ゾーンファイルの $ORIGIN と同じドメインを入力してください</div>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label small fw-bold">ファイル</label>
+      <input type="file" name="file" class="form-control" accept=".txt,.csv,.zone">
+    </div>
+
+    <button type="submit" class="btn btn-secondary">
+      <i class="bi bi-eye me-1"></i>プレビュー
+    </button>
+  </form>
+</div>
+
+<div id="preview-section" class="mt-4"></div>
+{% endblock %}

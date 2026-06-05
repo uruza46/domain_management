@@ -1,0 +1,152 @@
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import redirect, render
+from django.views.decorators.http import require_POST
+
+from .importers import ImportResult, parse_csv_file, parse_zone_file
+from .models import Domain
+
+
+@login_required
+def dashboard(request):
+    context = {
+        "managed_count": Domain.objects.filter(mgmt_category=Domain.CATEGORY_MANAGED).count(),
+        "individual_count": Domain.objects.filter(mgmt_category=Domain.CATEGORY_INDIVIDUAL).count(),
+        "expiring_count": Domain.objects.filter(expires_at__isnull=False).count(),
+        "inventory_unanswered_count": 0,
+    }
+    return render(request, "dashboard.html", context)
+
+
+@login_required
+def import_form(request):
+    return render(request, "domains/import_form.html")
+
+
+@login_required
+@require_POST
+def import_preview(request):
+    file_type = request.POST.get("file_type", "")
+    uploaded = request.FILES.get("file")
+
+    if file_type not in ("zone", "csv"):
+        results = [ImportResult(fqdn="", action="error", error_message="ファイル種別が不正です")]
+        return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type})
+
+    if not uploaded:
+        results = [ImportResult(fqdn="", action="error", error_message="ファイルが選択されていません")]
+        return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type})
+
+    try:
+        content = uploaded.read().decode("utf-8")
+    except UnicodeDecodeError:
+        results = [ImportResult(fqdn="", action="error", error_message="UTF-8 でデコードできません")]
+        return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type})
+
+    if file_type == "zone":
+        origin = request.POST.get("origin", "").strip()
+        if not origin:
+            results = [ImportResult(fqdn="", action="error", error_message="ゾーンオリジンを入力してください")]
+            return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type})
+        results = parse_zone_file(content, origin=origin)
+    else:
+        results = parse_csv_file(content)
+
+    existing = set(Domain.objects.values_list("fqdn", flat=True))
+    for result in results:
+        if result.action == "create" and result.fqdn in existing:
+            result.action = "skip"
+
+    request.session["import_results"] = [
+        {
+            "fqdn": result.fqdn,
+            "action": result.action,
+            "record_type": result.record_type,
+            "record_value": result.record_value,
+            "record_ttl": result.record_ttl,
+            "error_message": result.error_message,
+            "extra": result.extra,
+        }
+        for result in results
+    ]
+    request.session["import_file_type"] = file_type
+
+    context = {
+        "results": results,
+        "file_type": file_type,
+        "create_count": sum(1 for result in results if result.action == "create"),
+        "skip_count": sum(1 for result in results if result.action == "skip"),
+        "error_count": sum(1 for result in results if result.action == "error"),
+    }
+    return render(request, "domains/import_preview.html", context)
+
+
+@login_required
+@require_POST
+def import_commit(request):
+    from django.utils import timezone
+
+    from dns_info.models import DnsRecord
+    from owners.models import ManagementUnit
+
+    raw_results = request.session.pop("import_results", None)
+    file_type = request.session.pop("import_file_type", "csv")
+
+    if not raw_results:
+        return redirect("import_form")
+
+    unit_id = request.POST.get("management_unit_id")
+    management_unit = ManagementUnit.objects.filter(id=unit_id).first() if unit_id else None
+    if management_unit is None:
+        management_unit = ManagementUnit.objects.order_by("fqdn_reversed").first()
+
+    if management_unit is None:
+        messages.error(request, "登録先の管理単位がありません")
+        return redirect("import_form")
+
+    created_count = 0
+    for item in raw_results:
+        if item["action"] != "create":
+            continue
+
+        fqdn = item["fqdn"]
+        extra = item.get("extra", {})
+
+        if file_type == "zone":
+            domain, _ = Domain.objects.get_or_create(
+                fqdn=fqdn,
+                defaults={
+                    "domain_type": Domain.TYPE_SUBDOMAIN,
+                    "status": Domain.STATUS_ACTIVE,
+                    "mgmt_category": Domain.CATEGORY_MANAGED,
+                    "management_unit": management_unit,
+                },
+            )
+            if item.get("record_type"):
+                DnsRecord.objects.get_or_create(
+                    domain=domain,
+                    record_type=item["record_type"],
+                    name=fqdn,
+                    defaults={
+                        "value": item["record_value"] or "",
+                        "ttl": item["record_ttl"],
+                        "collected_at": timezone.now(),
+                    },
+                )
+            created_count += 1
+            continue
+
+        Domain.objects.update_or_create(
+            fqdn=fqdn,
+            defaults={
+                "domain_type": extra.get("domain_type", Domain.TYPE_SUBDOMAIN),
+                "status": extra.get("status", Domain.STATUS_ACTIVE),
+                "mgmt_category": extra.get("mgmt_category", Domain.CATEGORY_MANAGED),
+                "management_unit": management_unit,
+                "purpose": extra.get("purpose", ""),
+            },
+        )
+        created_count += 1
+
+    messages.success(request, f"{created_count} 件を登録しました")
+    return redirect("dashboard")
