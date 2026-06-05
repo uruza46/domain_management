@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     "axes",
     "owners",
     "domains",
+    "requests",
     "registrars",
     "dns_info",
     "certificates",
