@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}申請詳細 - {{ req.proposed_fqdn }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h1 class="page-title">{{ req.proposed_fqdn }}</h1>
+  <span class="badge"
+        style="{% if req.status == 'approved' %}background:#dcfce7;color:#15803d
+               {% elif req.status == 'rejected' %}background:#fee2e2;color:#dc2626
+               {% else %}background:#dbeafe;color:#1d4ed8{% endif %}">
+    {{ req.get_status_display }}
+  </span>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="form-card">
+      <h3 class="h6 fw-bold mb-3">申請情報</h3>
+      <dl style="font-size:0.85rem">
+        <dt class="text-muted small">目的</dt><dd>{{ req.purpose|default:"—" }}</dd>
+        <dt class="text-muted small">ブランド</dt><dd>{{ req.brand|default:"—" }}</dd>
+        <dt class="text-muted small">会社</dt><dd>{{ req.company|default:"—" }}</dd>
+        <dt class="text-muted small">申請日</dt><dd>{{ req.created_at|date:"Y-m-d H:i" }}</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="form-card">
+      <h3 class="h6 fw-bold mb-3">レビュー状況</h3>
+      {% for review in reviews %}
+      <div class="d-flex align-items-center justify-content-between mb-2 p-2"
+           style="background:#f8fafc;border-radius:8px;font-size:0.85rem">
+        <div>
+          <strong>{{ review.get_review_type_display }}</strong>
+          <span class="badge ms-2"
+                style="{% if review.status == 'approved' %}background:#dcfce7;color:#15803d
+                       {% elif review.status == 'rejected' %}background:#fee2e2;color:#dc2626
+                       {% else %}background:#fef9c3;color:#92400e{% endif %}">
+            {{ review.get_status_display }}
+          </span>
+        </div>
+        {% if review.status == 'pending' and req.status == 'reviewing' %}
+        <a href="{% url 'review_form' req.id review.review_type %}"
+           class="btn btn-outline-primary btn-sm" style="font-size:0.75rem">レビューする</a>
+        {% endif %}
+      </div>
+      {% endfor %}
+
+      {% if req.status == 'review_complete' %}
+      <div class="mt-3">
+        <a href="{% url 'final_approval_form' req.id %}" class="btn btn-warning btn-sm">最終承認へ</a>
+      </div>
+      {% endif %}
+
+      {% if req.status == 'approved' and req.domain %}
+      <div class="mt-3 p-2" style="background:#dcfce7;border-radius:8px;font-size:0.82rem">
+        ✅ Domain 作成済み: <strong style="font-family:monospace">{{ req.domain.fqdn }}</strong>
+      </div>
+      {% endif %}
+
+      {% if req.status == 'rejected' and req.reject_comment %}
+      <div class="mt-3 p-2" style="background:#fee2e2;border-radius:8px;font-size:0.82rem">
+        ❌ 棄却理由: {{ req.reject_comment }}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

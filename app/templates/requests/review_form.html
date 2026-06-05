@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ review.get_review_type_display }} - {{ req.proposed_fqdn }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h1 class="page-title">{{ review.get_review_type_display }}</h1>
+  <div class="text-muted small">対象: <code>{{ req.proposed_fqdn }}</code></div>
+</div>
+<div class="form-card" style="max-width:520px">
+  <dl style="font-size:0.85rem;margin-bottom:16px">
+    <dt class="text-muted small">取得目的</dt><dd>{{ req.purpose|default:"—" }}</dd>
+    <dt class="text-muted small">関連ブランド</dt><dd>{{ req.brand|default:"—" }}</dd>
+  </dl>
+  <form method="post">
+    {% csrf_token %}
+    <div class="mb-3">
+      <label class="form-label small fw-bold">コメント</label>
+      <textarea name="comment" class="form-control" rows="4"
+                placeholder="判断根拠や懸念点を記入してください"></textarea>
+    </div>
+    <div class="d-flex gap-2">
+      <button type="submit" name="action" value="approve" class="btn btn-success btn-sm">承認</button>
+      <button type="submit" name="action" value="reject" class="btn btn-danger btn-sm">棄却</button>
+      <a href="{% url 'request_detail' req.id %}" class="btn btn-outline-secondary btn-sm ms-auto">戻る</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}最終承認 - {{ req.proposed_fqdn }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h1 class="page-title">最終承認</h1>
+  <div class="text-muted small">ブランド・知財レビューが完了しました</div>
+</div>
+<div class="form-card" style="max-width:520px">
+  <dl style="font-size:0.85rem;margin-bottom:16px">
+    <dt class="text-muted small">申請 FQDN</dt><dd><code>{{ req.proposed_fqdn }}</code></dd>
+    <dt class="text-muted small">目的</dt><dd>{{ req.purpose|default:"—" }}</dd>
+  </dl>
+  <form method="post">
+    {% csrf_token %}
+    <div class="mb-3">
+      <label class="form-label small fw-bold">割り当てる管理単位 <span class="text-danger">*</span></label>
+      <select name="management_unit_id" class="form-select" required>
+        <option value="">— 選択してください —</option>
+        {% for u in units %}
+        <option value="{{ u.id }}">{{ u.unit_name }}（{{ u.get_unit_type_display }}）</option>
+        {% endfor %}
+      </select>
+      <div class="form-text">承認後、このドメインは選択した管理単位に所属します</div>
+    </div>
+    <div class="mb-3">
+      <label class="form-label small fw-bold">棄却コメント（棄却する場合）</label>
+      <textarea name="comment" class="form-control" rows="3"></textarea>
+    </div>
+    <div class="d-flex gap-2">
+      <button type="submit" name="action" value="approve" class="btn btn-success btn-sm">承認して Domain 作成</button>
+      <button type="submit" name="action" value="reject" class="btn btn-danger btn-sm">棄却</button>
+      <a href="{% url 'request_detail' req.id %}" class="btn btn-outline-secondary btn-sm ms-auto">戻る</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

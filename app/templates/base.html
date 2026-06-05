@@ -38,6 +38,7 @@
       <ul class="nav flex-column pt-1">
         <li><a class="nav-link {% block nav_dashboard %}{% endblock %}" href="{% url 'dashboard' %}"><i class="bi bi-speedometer2"></i>ダッシュボード</a></li>
         <li><a class="nav-link disabled" href="#"><i class="bi bi-list-ul"></i>ドメイン台帳</a></li>
+        <li><a class="nav-link {% block nav_requests %}{% endblock %}" href="{% url 'request_list' %}"><i class="bi bi-file-earmark-plus"></i>取得申請</a></li>
         <li><a class="nav-link disabled" href="#"><i class="bi bi-eye"></i>監視対象</a></li>
         <li><a class="nav-link disabled" href="#"><i class="bi bi-exclamation-triangle"></i>インシデント</a></li>
         <div class="sidebar-section">管理業務</div>
