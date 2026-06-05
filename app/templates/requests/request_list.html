@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}取得申請一覧{% endblock %}
+
+{% block content %}
+<div class="mb-4 d-flex align-items-center justify-content-between">
+  <h1 class="page-title">ドメイン取得申請</h1>
+  <a href="{% url 'request_new' %}" class="btn btn-primary btn-sm">+ 新規申請</a>
+</div>
+
+<div class="form-card">
+  <table class="table table-sm mb-0" style="font-size:0.85rem">
+    <thead style="background:#f8fafc">
+      <tr>
+        <th>申請 FQDN</th>
+        <th>目的</th>
+        <th>ステータス</th>
+        <th>申請日</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in requests %}
+      <tr>
+        <td style="font-family:monospace">{{ r.proposed_fqdn }}</td>
+        <td class="text-muted small">{{ r.purpose|truncatechars:40 }}</td>
+        <td>
+          <span class="badge"
+                style="font-size:0.75rem;
+                {% if r.status == 'approved' %}background:#dcfce7;color:#15803d
+                {% elif r.status == 'rejected' %}background:#fee2e2;color:#dc2626
+                {% elif r.status == 'review_complete' %}background:#fef9c3;color:#92400e
+                {% else %}background:#dbeafe;color:#1d4ed8{% endif %}">
+            {{ r.get_status_display }}
+          </span>
+        </td>
+        <td class="text-muted small">{{ r.created_at|date:"Y-m-d" }}</td>
+        <td><a href="{% url 'request_detail' r.id %}" class="text-primary small">詳細</a></td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="text-center text-muted py-4">申請がありません</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

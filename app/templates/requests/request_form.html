@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}新規ドメイン取得申請{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h1 class="page-title">新規ドメイン取得申請</h1>
+</div>
+<div class="form-card" style="max-width:560px">
+  {% if error %}<div class="alert alert-danger small">{{ error }}</div>{% endif %}
+  <form method="post">
+    {% csrf_token %}
+    <div class="mb-3">
+      <label class="form-label small fw-bold">申請 FQDN <span class="text-danger">*</span></label>
+      <input type="text" name="proposed_fqdn" class="form-control" placeholder="new-brand.example.co.jp" required>
+    </div>
+    <div class="mb-3">
+      <label class="form-label small fw-bold">取得目的</label>
+      <textarea name="purpose" class="form-control" rows="3"></textarea>
+    </div>
+    <div class="mb-3">
+      <label class="form-label small fw-bold">関連ブランド</label>
+      <select name="brand_code" class="form-select">
+        <option value="">— 選択なし —</option>
+        {% for b in brands %}<option value="{{ b.brand_code }}">{{ b.brand_name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="mb-3">
+      <label class="form-label small fw-bold">対象会社</label>
+      <select name="company_code" class="form-select">
+        <option value="">— 選択なし —</option>
+        {% for c in companies %}<option value="{{ c.company_code }}">{{ c.company_name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="d-flex gap-2 justify-content-end">
+      <a href="{% url 'request_list' %}" class="btn btn-outline-secondary btn-sm">キャンセル</a>
+      <button type="submit" class="btn btn-primary btn-sm">申請する</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
