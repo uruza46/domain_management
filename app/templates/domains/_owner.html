@@ -1,0 +1,11 @@
+{% with unit=domain.management_unit %}
+  {% if unit.primary_owner %}
+    <span class="avatar" style="background:#6366f1">{{ unit.primary_owner.family_name|slice:':1' }}</span>
+    <span class="ms-1">{{ unit.primary_owner.family_name }} {{ unit.primary_owner.given_name }}</span>
+  {% elif unit.mgmt_owner %}
+    <span class="avatar" style="background:#6366f1">{{ unit.mgmt_owner.family_name|slice:':1' }}</span>
+    <span class="ms-1">{{ unit.mgmt_owner.family_name }} {{ unit.mgmt_owner.given_name }}</span>
+  {% else %}
+    <span class="text-muted">-</span>
+  {% endif %}
+{% endwith %}

@@ -1,0 +1,4 @@
+<a class="chip {% if fkey == key %}active{% endif %}"
+   href="?view={{ view_mode }}{% if key %}&status={{ key }}{% endif %}{% if q %}&q={{ q }}{% endif %}">
+  {{ label }} <span class="text-muted">{{ n }}</span>
+</a>

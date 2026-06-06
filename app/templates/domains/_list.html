@@ -1,0 +1,52 @@
+{% load ledger_extras %}
+<div class="text-muted small mb-2">{{ groups|length }} 繧ｰ繝ｫ繝ｼ繝苓｡ｨ遉ｺ</div>
+{% for group in groups %}
+<div class="ledger-group mb-3">
+  <div class="d-flex align-items-center gap-2 px-1 py-2 border-bottom">
+    <i class="bi bi-globe2 text-secondary"></i>
+    <span style="font-family:monospace;font-weight:700">{{ group.root.domain.fqdn }}</span>
+    {% include "domains/_status_pill.html" with status=group.root.domain.status %}
+    <span class="text-muted small">繧ｵ繝悶ラ繝｡繧､繝ｳ {{ group.root.descendant_count }} 莉ｶ</span>
+  </div>
+  <table class="table table-sm mb-0" style="font-size:.82rem">
+    <thead style="background:#fcfcfd">
+      <tr>
+        <th>繝峨Γ繧､繝ｳ・医ヵ繝ｫ繝代せ・</th>
+        <th style="width:110px">繧ｹ繝・・繧ｿ繧ｹ</th>
+        <th style="width:150px">諡・ｽ楢・</th>
+        <th style="width:160px">SSL譛牙柑譛滄剞</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="ledger-row" style="cursor:pointer" data-fqdn="{{ group.root.domain.fqdn }}"
+          hx-get="{% url 'domain_panel' group.root.domain.id %}" hx-target="#drawer" hx-swap="innerHTML">
+        <td style="font-family:monospace">
+          <strong>{{ group.root.domain.fqdn|leaf_label }}</strong><span class="text-muted">{{ group.root.domain.fqdn|rest_label }}</span>
+          <span class="badge bg-light text-secondary border ms-1">L0</span>
+        </td>
+        <td>{% include "domains/_status_pill.html" with status=group.root.domain.status %}</td>
+        <td>{% include "domains/_owner.html" with domain=group.root.domain %}</td>
+        <td>{% include "domains/_ssl.html" with expiry=group.root.ssl_expiry state=group.root.ssl_state %}</td>
+      </tr>
+      {% for node in group.rows %}
+      <tr class="ledger-row" style="cursor:pointer" data-fqdn="{{ node.domain.fqdn }}"
+          hx-get="{% url 'domain_panel' node.domain.id %}" hx-target="#drawer" hx-swap="innerHTML">
+        <td style="font-family:monospace">
+          <span style="display:inline-block;width:{% indent_px node.depth %}px"></span>
+          {% if node.depth > 1 %}<span class="text-muted">└</span>{% endif %}
+          <strong>{{ node.domain.fqdn|leaf_label }}</strong><span class="text-muted">{{ node.domain.fqdn|rest_label }}</span>
+          <span class="badge bg-light text-secondary border ms-1">L{{ node.depth }}</span>
+        </td>
+        <td>{% include "domains/_status_pill.html" with status=node.domain.status %}</td>
+        <td>{% include "domains/_owner.html" with domain=node.domain %}</td>
+        <td>{% include "domains/_ssl.html" with expiry=node.ssl_expiry state=node.ssl_state %}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="4" class="text-center text-muted py-3">隧ｲ蠖薙↑縺・</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% empty %}
+<div class="text-center text-muted py-5">隧ｲ蠖薙☆繧九ラ繝｡繧､繝ｳ縺後≠繧翫∪縺帙ｓ</div>
+{% endfor %}

@@ -1,0 +1,22 @@
+<div class="col">
+  <div class="px-3 py-2 border-bottom text-muted small">{{ title }}</div>
+  {% for node in nodes %}
+  <div class="cell"
+       hx-get="{% url 'domain_panel' node.domain.id %}"
+       hx-target="#drawer"
+       hx-swap="innerHTML">
+    <span class="dot {% if node.domain.status == 'active' %}bg-success{% elif node.domain.status == 'expired' %}bg-warning{% else %}bg-secondary{% endif %}"></span>
+    <span>{{ node.domain.fqdn }}</span>
+    {% if node.children %}
+    <button class="btn btn-link btn-sm p-0 ms-auto"
+            hx-get="{% url 'domain_tree_children' node.domain.id %}"
+            hx-target="#miller"
+            hx-swap="beforeend">
+      <i class="bi bi-chevron-right"></i>
+    </button>
+    {% endif %}
+  </div>
+  {% empty %}
+  <div class="text-muted small p-3">No children</div>
+  {% endfor %}
+</div>
