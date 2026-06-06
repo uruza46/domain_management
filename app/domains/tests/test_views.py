@@ -74,8 +74,8 @@ def test_ledger_lists_groups_and_counts(ledger_client, ledger_data):
     body = response.content.decode()
     assert "example.co.jp" in body
     assert "www.example.co.jp" in body
-    assert "蛻ｩ逕ｨ荳ｭ" in body
-    assert "螟ｱ蜉ｹ逍代＞" in body
+    assert "利用中" in body
+    assert "失効済み" in body
 
 
 @pytest.mark.django_db

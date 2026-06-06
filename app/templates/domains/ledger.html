@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}繝峨Γ繧､繝ｳ蜿ｰ蟶ｳ{% endblock %}
+{% block title %}ドメイン台帳{% endblock %}
 {% block nav_domains %}active{% endblock %}
 
 {% block content %}
@@ -25,44 +25,44 @@
 
 <div class="d-flex align-items-center justify-content-between mb-3">
   <div>
-    <h1 class="page-title">繝峨Γ繧､繝ｳ蜿ｰ蟶ｳ</h1>
-    <div class="text-muted small">蜈ｨ {{ total }} 繝峨Γ繧､繝ｳ</div>
+    <h1 class="page-title">ドメイン台帳</h1>
+    <div class="text-muted small">全 {{ total }} ドメイン</div>
   </div>
   <div class="d-flex gap-2 align-items-center">
     <form method="get" class="d-flex gap-2">
       <input type="hidden" name="view" value="{{ view_mode }}">
-      <input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="繝峨Γ繧､繝ｳ繧呈､懃ｴ｢..." style="width:220px">
+      <input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="ドメインを検索..." style="width:220px">
     </form>
     <div class="btn-group btn-group-sm">
-      <a href="?view=list" class="btn {% if view_mode != 'tree' %}btn-primary{% else %}btn-outline-secondary{% endif %}"><i class="bi bi-list-ul"></i> 荳隕ｧ</a>
-      <a href="?view=tree" class="btn {% if view_mode == 'tree' %}btn-primary{% else %}btn-outline-secondary{% endif %}"><i class="bi bi-diagram-3"></i> 繝・Μ繝ｼ</a>
+      <a href="?view=list" class="btn {% if view_mode != 'tree' %}btn-primary{% else %}btn-outline-secondary{% endif %}"><i class="bi bi-list-ul"></i> 一覧</a>
+      <a href="?view=tree" class="btn {% if view_mode == 'tree' %}btn-primary{% else %}btn-outline-secondary{% endif %}"><i class="bi bi-diagram-3"></i> ツリー</a>
     </div>
   </div>
 </div>
 
 <div class="d-flex flex-wrap gap-2 mb-3">
-  {% include "domains/_chip.html" with key="" label="縺吶∋縺ｦ" n=counts.all %}
-  {% include "domains/_chip.html" with key="active" label="蛻ｩ逕ｨ荳ｭ" n=counts.active %}
-  {% include "domains/_chip.html" with key="expired" label="螟ｱ蜉ｹ逍代＞" n=counts.expired %}
-  {% include "domains/_chip.html" with key="deleted" label="蟒・ｭ｢" n=counts.deleted %}
-  {% include "domains/_chip.html" with key="pending" label="謇ｿ隱榊ｾ・■" n=counts.pending %}
-  {% include "domains/_chip.html" with key="ssl_soon" label="SSL譛滄剞髢楢ｿ・" n=counts.ssl_soon %}
-  {% include "domains/_chip.html" with key="ssl_expired" label="譛滄剞蛻・ｌ" n=counts.ssl_expired %}
-  <span class="ms-auto text-muted small align-self-center">蝓ｺ貅匁律 {{ today|date:'Y/m/d' }}</span>
+  {% include "domains/_chip.html" with key="" label="すべて" n=counts.all %}
+  {% include "domains/_chip.html" with key="active" label="利用中" n=counts.active %}
+  {% include "domains/_chip.html" with key="expired" label="失効済み" n=counts.expired %}
+  {% include "domains/_chip.html" with key="deleted" label="廃止" n=counts.deleted %}
+  {% include "domains/_chip.html" with key="pending" label="承認待ち" n=counts.pending %}
+  {% include "domains/_chip.html" with key="ssl_soon" label="SSL期限間近" n=counts.ssl_soon %}
+  {% include "domains/_chip.html" with key="ssl_expired" label="SSL期限切れ" n=counts.ssl_expired %}
+  <span class="ms-auto text-muted small align-self-center">基準日 {{ today|date:'Y/m/d' }}</span>
 </div>
 
 <div class="ledger-grid">
   <div>
     {% if view_mode == 'tree' %}
       <div class="drawer-card p-2"><div class="miller" id="miller">
-        {% include "domains/_tree_column.html" with title="繝ｫ繝ｼ繝医ラ繝｡繧､繝ｳ" nodes=roots %}
+        {% include "domains/_tree_column.html" with title="ルートドメイン" nodes=roots %}
       </div></div>
     {% else %}
       <div id="list-region">{% include "domains/_list.html" %}</div>
     {% endif %}
   </div>
   <div class="drawer-card p-3" id="drawer">
-    {% if panel %}{% include "domains/_panel.html" %}{% else %}<div class="text-muted text-center py-5">繝峨Γ繧､繝ｳ繧帝∈謚槭＠縺ｦ縺上□縺輔＞</div>{% endif %}
+    {% if panel %}{% include "domains/_panel.html" %}{% else %}<div class="text-muted text-center py-5">ドメインを選択してください</div>{% endif %}
   </div>
 </div>
 

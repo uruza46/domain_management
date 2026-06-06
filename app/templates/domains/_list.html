@@ -1,20 +1,20 @@
 {% load ledger_extras %}
-<div class="text-muted small mb-2">{{ groups|length }} 繧ｰ繝ｫ繝ｼ繝苓｡ｨ遉ｺ</div>
+<div class="text-muted small mb-2">{{ groups|length }} グループ表示</div>
 {% for group in groups %}
 <div class="ledger-group mb-3">
   <div class="d-flex align-items-center gap-2 px-1 py-2 border-bottom">
     <i class="bi bi-globe2 text-secondary"></i>
     <span style="font-family:monospace;font-weight:700">{{ group.root.domain.fqdn }}</span>
     {% include "domains/_status_pill.html" with status=group.root.domain.status %}
-    <span class="text-muted small">繧ｵ繝悶ラ繝｡繧､繝ｳ {{ group.root.descendant_count }} 莉ｶ</span>
+    <span class="text-muted small">サブドメイン {{ group.root.descendant_count }} 件</span>
   </div>
   <table class="table table-sm mb-0" style="font-size:.82rem">
     <thead style="background:#fcfcfd">
       <tr>
-        <th>繝峨Γ繧､繝ｳ・医ヵ繝ｫ繝代せ・</th>
-        <th style="width:110px">繧ｹ繝・・繧ｿ繧ｹ</th>
-        <th style="width:150px">諡・ｽ楢・</th>
-        <th style="width:160px">SSL譛牙柑譛滄剞</th>
+        <th>ドメイン（フルパス）</th>
+        <th style="width:110px">ステータス</th>
+        <th style="width:150px">担当者</th>
+        <th style="width:160px">SSL有効期限</th>
       </tr>
     </thead>
     <tbody>
@@ -42,11 +42,11 @@
         <td>{% include "domains/_ssl.html" with expiry=node.ssl_expiry state=node.ssl_state %}</td>
       </tr>
       {% empty %}
-      <tr><td colspan="4" class="text-center text-muted py-3">隧ｲ蠖薙↑縺・</td></tr>
+      <tr><td colspan="4" class="text-center text-muted py-3">該当なし</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
 {% empty %}
-<div class="text-center text-muted py-5">隧ｲ蠖薙☆繧九ラ繝｡繧､繝ｳ縺後≠繧翫∪縺帙ｓ</div>
+<div class="text-center text-muted py-5">該当するドメインがありません</div>
 {% endfor %}

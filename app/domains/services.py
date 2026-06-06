@@ -7,7 +7,7 @@ SSL_SOON_DAYS = 30
 
 STATUS_DISPLAY = {
     Domain.STATUS_ACTIVE: ("利用中", "active"),
-    Domain.STATUS_EXPIRED: ("失効疑い", "expired"),
+    Domain.STATUS_EXPIRED: ("失効済み", "expired"),
     Domain.STATUS_DELETED: ("廃止", "deleted"),
     Domain.STATUS_PENDING: ("承認待ち", "pending"),
 }
@@ -133,8 +133,15 @@ def avatar_color(name):
 
 
 def ledger_counts(domains, today):
-    counts = {"all": len(domains), "active": 0, "expired": 0, "deleted": 0,
-              "pending": 0, "ssl_soon": 0, "ssl_expired": 0}
+    counts = {
+        "all": len(domains),
+        "active": 0,
+        "expired": 0,
+        "deleted": 0,
+        "pending": 0,
+        "ssl_soon": 0,
+        "ssl_expired": 0,
+    }
     for d in domains:
         if d.status in counts:
             counts[d.status] += 1
