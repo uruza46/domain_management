@@ -9,6 +9,7 @@ from approvals.models import Approval
 from certificates.models import Certificate
 from dns_info.models import DnsInfo, DnsRecord
 from domains.models import Brand, Company, Domain, DomainHistory
+from domains.osint_seed import seed_softbank_osint_data
 from incidents.models import Incident
 from monitoring.models import MonitoringTarget
 from notifications.models import NotificationLog
@@ -200,4 +201,12 @@ class Command(BaseCommand):
             diff_json={"created": True},
         )
 
-        self.stdout.write(self.style.SUCCESS("Seed data loaded. Login with admin / SEED_ADMIN_PASSWORD."))
+        osint_counts = seed_softbank_osint_data()
+        self.stdout.write(
+            self.style.SUCCESS(
+                "Seed data loaded. "
+                f"SoftBank OSINT domains: {osint_counts['total']} "
+                f"(roots: {osint_counts['roots']}, hosts: {osint_counts['hosts']}). "
+                "Login with admin / SEED_ADMIN_PASSWORD."
+            )
+        )
