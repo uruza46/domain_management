@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>公開ドメイン管理 — Domain Registry</title>
+<style>
+  :root{
+    --green:#16a34a; --green-bg:#dcfce7; --green-tx:#15803d;
+    --red:#dc2626;   --red-bg:#fee2e2;   --red-tx:#b91c1c;
+    --amber:#d97706; --amber-bg:#fef3c7; --amber-tx:#b45309;
+    --ink:#111827; --muted:#6b7280; --faint:#9ca3af;
+    --line:#e5e7eb; --line2:#eef0f3; --bg:#f8fafc; --navy:#1e293b;
+    --blue:#2563eb;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,"Courier New",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",sans-serif;
+    color:var(--ink); background:#fff; font-size:13px; line-height:1.5;
+  }
+  /* ---------- top bar ---------- */
+  .topbar{height:53px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:14px; padding:0 16px;}
+  .brand{display:flex; align-items:center; gap:9px; white-space:nowrap;}
+  .brand .logo{width:24px;height:24px;border-radius:6px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;}
+  .brand b{font-size:14px}
+  .brand .pgtitle{font-weight:600;margin-left:6px}
+  .brand .count{color:var(--muted);font-size:12px;margin-left:4px}
+  .search{flex:1;display:flex;justify-content:center}
+  .search .box{position:relative;width:100%;max-width:540px}
+  .search input{width:100%;height:34px;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:0 34px 0 32px;font-size:13px;outline:none}
+  .search input:focus{border-color:#cbd5e1;background:#fff}
+  .search .mag{position:absolute;left:11px;top:9px;color:var(--faint)}
+  .search kbd{position:absolute;right:10px;top:7px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 6px;color:var(--muted);font-size:11px;background:#fff;font-family:var(--mono)}
+  .toolbtns{display:flex;align-items:center;gap:8px}
+  .seg{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:2px}
+  .seg button{border:0;background:transparent;border-radius:6px;padding:5px 11px;font-size:12px;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:5px}
+  .seg button.active{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08);font-weight:600}
+  .btn-primary{background:var(--navy);color:#fff;border:0;border-radius:8px;height:34px;padding:0 14px;font-size:13px;cursor:pointer;font-weight:600}
+  /* ---------- filter bar ---------- */
+  .filterbar{display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--line);}
+  .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 11px;font-size:12px;color:var(--ink);cursor:pointer;white-space:nowrap}
+  .chip .dot{width:7px;height:7px;border-radius:50%}
+  .chip .num{color:var(--muted);font-weight:600}
+  .chip.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .chip.active .num{color:#cbd5e1}
+  .chip.sep{margin-left:6px}
+  .filterbar .spacer{flex:1}
+  .basedate{color:var(--faint);font-size:12px}
+  /* ---------- layout ---------- */
+  .layout{display:grid;grid-template-columns:minmax(0,1fr) 372px;height:calc(100vh - 53px - 45px)}
+  .main{overflow:auto;padding:0 0 40px}
+  .drawer{border-left:1px solid var(--line);overflow:auto;background:#fff}
+  .countline{padding:9px 16px;color:var(--muted);font-size:12px}
+  .countline b{color:var(--ink)}
+  /* ---------- list view ---------- */
+  .group{border-bottom:1px solid var(--line)}
+  .ghead{display:flex;align-items:center;gap:10px;padding:11px 16px;cursor:pointer}
+  .ghead .gicon{color:var(--faint)}
+  .ghead .caret{color:var(--faint);width:14px;display:inline-block;transition:transform .15s}
+  .group.collapsed .caret{transform:rotate(-90deg)}
+  .ghead .groot{font-family:var(--mono);font-weight:700}
+  .ghead .gsub{color:var(--muted);font-size:12px}
+  .health{margin-left:auto;display:flex;align-items:center;gap:3px;width:110px}
+  .health .bar{height:6px;border-radius:3px;background:var(--green);flex:1}
+  .health .sq{width:7px;height:7px;border-radius:2px}
+  table{width:100%;border-collapse:collapse}
+  thead th{text-align:left;font-weight:500;color:var(--faint);font-size:11px;padding:6px 16px;border-top:1px solid var(--line2);border-bottom:1px solid var(--line2);background:#fcfcfd}
+  th.c-status{width:120px} th.c-owner{width:170px} th.c-ssl{width:185px}
+  tbody tr{border-bottom:1px solid var(--line2);cursor:pointer}
+  tbody tr:hover{background:#f9fafb}
+  tbody tr.sel{background:#eef4ff}
+  tbody tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--blue)}
+  td{padding:8px 16px;vertical-align:middle}
+  .path{font-family:var(--mono);font-size:12.5px;white-space:nowrap;display:flex;align-items:center}
+  .path .guide{color:#cdd2da}
+  .path .leaf{color:var(--ink);font-weight:700}
+  .path .rest{color:var(--faint)}
+  .lbadge{display:inline-block;margin-left:8px;border:1px solid var(--line);border-radius:4px;color:var(--muted);font-size:10px;padding:0 5px;font-family:var(--mono);background:#fff}
+  .pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:600}
+  .pill .d{width:6px;height:6px;border-radius:50%}
+  .pill.pub{background:var(--green-bg);color:var(--green-tx)} .pill.pub .d{background:var(--green)}
+  .pill.stop{background:var(--red-bg);color:var(--red-tx)} .pill.stop .d{background:var(--red)}
+  .pill.rsv{background:var(--amber-bg);color:var(--amber-tx)} .pill.rsv .d{background:var(--amber)}
+  .owner{display:flex;align-items:center;gap:8px}
+  .av{width:22px;height:22px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+  .ssl{font-family:var(--mono);color:#374151;font-size:12.5px;display:flex;align-items:center;gap:8px}
+  .warn{font-size:10.5px;font-weight:700;border-radius:4px;padding:1px 6px}
+  .warn.soon{background:var(--amber-bg);color:var(--amber-tx)}
+  .warn.exp{background:var(--red-bg);color:var(--red-tx)}
+  /* ---------- tree (miller) ---------- */
+  #treeView{display:none}
+  .crumb{display:flex;align-items:center;gap:7px;padding:11px 16px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+  .crumb .ic{color:var(--faint)} .crumb b{color:var(--ink)} .crumb .sepc{color:var(--faint)}
+  .cols{display:flex;height:100%;overflow-x:auto}
+  .col{min-width:232px;width:232px;border-right:1px solid var(--line);overflow-y:auto}
+  .colhead{display:flex;align-items:center;gap:7px;padding:9px 12px;color:var(--muted);font-size:12px;border-bottom:1px solid var(--line2);position:sticky;top:0;background:#fff}
+  .colhead .n{margin-left:auto;color:var(--faint)}
+  .cell{display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;font-family:var(--mono);font-size:12.5px}
+  .cell:hover{background:#f9fafb}
+  .cell.sel{background:#eef4ff;font-weight:700}
+  .cell .d{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+  .cell .chev{margin-left:auto;color:var(--faint)}
+  /* ---------- drawer ---------- */
+  .dwrap{padding:18px}
+  .dtitle{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .dtitle h2{font-size:16px;margin:0;font-family:var(--mono);word-break:break-all;line-height:1.35}
+  .x{border:0;background:transparent;color:var(--faint);font-size:18px;cursor:pointer;line-height:1}
+  .dcrumb{font-family:var(--mono);font-size:12px;color:var(--muted);margin:8px 0 16px;word-break:break-all}
+  .dcrumb .sepc{color:var(--faint);margin:0 4px}
+  .dstatus{display:flex;align-items:center;gap:12px;margin-bottom:18px;font-size:13px}
+  .dstatus .ssl{color:var(--muted)}
+  .sechead{color:var(--faint);font-size:11px;font-weight:600;letter-spacing:.04em;margin:18px 0 8px}
+  .kv{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--line2);font-size:13px}
+  .kv .k{color:var(--muted)} .kv .v{text-align:right;font-weight:500}
+  .kv .v.mono{font-family:var(--mono);font-size:12.5px;font-weight:400}
+  .dns{background:var(--bg);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .dns .rec{display:flex;gap:12px;padding:9px 12px;border-bottom:1px solid var(--line2);align-items:flex-start}
+  .dns .rec:last-child{border-bottom:0}
+  .dns .rt{color:var(--blue);font-weight:700;font-family:var(--mono);font-size:12px;width:34px;flex-shrink:0}
+  .dns .rv{font-family:var(--mono);font-size:12px;color:#374151;word-break:break-all}
+  .dbtns{display:flex;gap:8px;margin-top:18px}
+  .dbtn{flex:1;border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;color:var(--ink)}
+  .dempty{padding:60px 20px;text-align:center;color:var(--faint)}
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">
+      <span class="logo">🌐</span><b>Domain Registry</b>
+      <span class="pgtitle">公開ドメイン管理</span>
+      <span class="count">全 <span id="totalCount">40</span> ドメイン</span>
+    </div>
+    <div class="search"><div class="box">
+      <span class="mag">🔍</span>
+      <input id="search" placeholder="ドメインを検索...">
+      <kbd>/</kbd>
+    </div></div>
+    <div class="toolbtns">
+      <div class="seg">
+        <button id="tabList" class="active" onclick="setView('list')">☰ 一覧</button>
+        <button id="tabTree" onclick="setView('tree')">🗂 ツリー</button>
+      </div>
+      <button class="btn-primary">＋ 登録</button>
+    </div>
+  </div>
+
+  <div class="filterbar" id="filterbar"></div>
+
+  <div class="layout">
+    <div class="main">
+      <div id="listView">
+        <div class="countline"><b id="shownCount">40</b> 件表示</div>
+        <div id="groups"></div>
+      </div>
+      <div id="treeView">
+        <div class="crumb" id="treeCrumb"></div>
+        <div class="cols" id="treeCols"></div>
+      </div>
+    </div>
+    <div class="drawer" id="drawer"></div>
+  </div>
+
+<script>
+const BASE = new Date(2026,5,6); // 2026/06/06
+const STATUS = {pub:{label:'公開',cls:'pub'}, stop:{label:'停止',cls:'stop'}, rsv:{label:'予約',cls:'rsv'}};
+const AVCOLORS = ['#0ea5e9','#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#64748b'];
+
+const DATA = [
+ {l:'softbank.jp', s:'pub', o:'渡辺 翔', ssl:'2026/11/02', dept:'コーポレート本部', c:[
+   {l:'www', s:'pub', o:'渡辺 翔', ssl:'2026/11/02'},
+   {l:'mb', s:'pub', o:'田中 健', ssl:'2026/09/20', dept:'モバイル技術部', c:[
+     {l:'business', s:'pub', o:'田中 健', ssl:'2026/08/12', c:[
+       {l:'dev', s:'rsv', o:'佐藤 美咲', ssl:'2026/12/01', c:[
+         {l:'mail', s:'pub', o:'佐藤 美咲', ssl:'2026/07/03', dns:[['MX','10 mail.dev.business.mb.softbank.jp'],['TXT','v=spf1 include:_spf.softbank.jp']]},
+         {l:'api', s:'pub', o:'鈴木 大輔', ssl:'2026/10/18'},
+       ]},
+       {l:'stg', s:'pub', o:'佐藤 美咲', ssl:'2026/06/20', c:[
+         {l:'mail', s:'stop', o:'佐藤 美咲', ssl:'2026/05/10'},
+       ]},
+     ]},
+     {l:'consumer', s:'pub', o:'高橋 由紀', ssl:'2027/01/09', c:[
+       {l:'portal', s:'pub', o:'高橋 由紀', ssl:'2026/11/28', dns:[['A','203.0.113.20']]},
+     ]},
+   ]},
+   {l:'corp', s:'pub', o:'中村 玲奈', ssl:'2026/12/15', c:[
+     {l:'ir', s:'pub', o:'中村 玲奈', ssl:'2026/10/30'},
+     {l:'recruit', s:'pub', o:'伊藤 彩', ssl:'2026/09/05'},
+   ]},
+   {l:'id', s:'pub', o:'山本 拓也', ssl:'2027/02/22', dept:'認証基盤部', c:[
+     {l:'auth', s:'pub', o:'山本 拓也', ssl:'2026/08/30', c:[
+       {l:'oauth', s:'pub', o:'山本 拓也', ssl:'2026/07/12'},
+     ]},
+   ]},
+ ]},
+ {l:'softbank.co.jp', s:'pub', o:'渡辺 翔', ssl:'2026/11/15', dept:'コーポレート本部', c:[
+   {l:'www', s:'pub', o:'渡辺 翔', ssl:'2026/11/15'},
+   {l:'ec', s:'pub', o:'小林 直樹', ssl:'2026/10/08', dept:'EC事業部', c:[
+     {l:'shop', s:'pub', o:'小林 直樹', ssl:'2026/09/19', c:[
+       {l:'cart', s:'pub', o:'松本 涼', ssl:'2026/08/25', c:[
+         {l:'api', s:'pub', o:'松本 涼', ssl:'2026/07/30'},
+       ]},
+     ]},
+     {l:'payment', s:'pub', o:'加藤 真理', ssl:'2027/01/20', c:[
+       {l:'gateway', s:'pub', o:'加藤 真理', ssl:'2026/12/11'},
+     ]},
+   ]},
+   {l:'support', s:'pub', o:'吉田 健一', ssl:'2026/11/08', dept:'カスタマーサポート部', c:[
+     {l:'faq', s:'pub', o:'吉田 健一', ssl:'2026/10/22'},
+     {l:'chat', s:'rsv', o:'吉田 健一', ssl:'2026/12/30'},
+   ]},
+   {l:'internal', s:'stop', o:'斎藤 学', ssl:'2026/04/18', dept:'情報システム部', c:[
+     {l:'tools', s:'stop', o:'斎藤 学', ssl:'2026/04/18'},
+   ]},
+ ]},
+ {l:'softbank.ne.jp', s:'pub', o:'森田 拓海', ssl:'2026/09/14', dept:'ネットワーク運用部', c:[
+   {l:'mail', s:'pub', o:'森田 拓海', ssl:'2026/09/14', c:[
+     {l:'smtp', s:'pub', o:'森田 拓海', ssl:'2026/08/08'},
+     {l:'imap', s:'pub', o:'森田 拓海', ssl:'2026/10/05'},
+   ]},
+   {l:'web', s:'pub', o:'森田 拓海', ssl:'2026/11/20', c:[
+     {l:'blog', s:'rsv', o:'岡田 直人', ssl:'2027/01/15'},
+   ]},
+   {l:'ftp', s:'stop', o:'岡田 直人', ssl:'2026/03/22'},
+   {l:'ns1', s:'pub', o:'森田 拓海', ssl:'2026/12/05'},
+   {l:'ns2', s:'pub', o:'森田 拓海', ssl:'2026/12/05'},
+   {l:'vpn', s:'pub', o:'岡田 直人', ssl:'2026/09/28'},
+ ]},
+];
+
+// ---- build derived fields (fqdn, parent, dept inheritance, refs) ----
+let ALL = [];
+function build(node, parent){
+  node.fqdn = parent ? node.l + '.' + parent.fqdn : node.l;
+  node.parent = parent;
+  node.isRoot = !parent;
+  if(!node.dept) node.dept = parent ? parent.dept : '';
+  node.labels = node.fqdn.split('.');
+  node.depth = node.labels.length - 2;        // L badge level (apex=0)
+  node.tier = node.labels.length - 1;          // 第N階層
+  ALL.push(node);
+  (node.c||[]).forEach(ch=>build(ch,node));
+  node.descCount = (node.c||[]).reduce((a,ch)=>a+1+ch.descCount,0);
+}
+DATA.forEach(r=>build(r,null));
+
+function avatar(name){
+  const fam = (name||'?').split(' ')[0];
+  let h=0; for(const ch of name) h=(h*31+ch.charCodeAt(0))>>>0;
+  const col = AVCOLORS[h%AVCOLORS.length];
+  return `<span class="av" style="background:${col}">${fam[0]}</span>`;
+}
+function parseDate(s){const[y,m,d]=s.split('/').map(Number);return new Date(y,m-1,d);}
+function daysLeft(s){return Math.round((parseDate(s)-BASE)/86400000);}
+function sslState(s){const d=daysLeft(s); if(d<0)return'exp'; if(d<=30)return'soon'; return'ok';}
+function sslWarn(s){const d=daysLeft(s),st=sslState(s);
+  if(st==='exp')return `<span class="warn exp">期限切れ</span>`;
+  if(st==='soon')return `<span class="warn soon">あと${d}日</span>`;
+  return '';}
+
+// ---- filters ----
+let activeFilter='all', query='';
+function matchFilter(n){
+  if(n.isRoot) return false; // roots are group headers, not counted rows here
+  switch(activeFilter){
+    case 'all': return true;
+    case 'pub': case 'stop': case 'rsv': return n.s===activeFilter;
+    case 'soon': return sslState(n.ssl)==='soon';
+    case 'exp': return sslState(n.ssl)==='exp';
+  }
+}
+function matchQuery(n){return !query || n.fqdn.toLowerCase().includes(query.toLowerCase());}
+
+function renderFilterBar(){
+  const subs = ALL.filter(n=>!n.isRoot);
+  const c = {
+    all: ALL.length,
+    pub: ALL.filter(n=>n.s==='pub').length,
+    stop: ALL.filter(n=>n.s==='stop').length,
+    rsv: ALL.filter(n=>n.s==='rsv').length,
+    soon: ALL.filter(n=>sslState(n.ssl)==='soon').length,
+    exp: ALL.filter(n=>sslState(n.ssl)==='exp').length,
+  };
+  const chip=(k,label,dot,sep)=>`<span class="chip ${activeFilter===k?'active':''} ${sep?'sep':''}" onclick="setFilter('${k}')">${dot?`<span class="dot" style="background:${dot}"></span>`:''}${label} <span class="num">${c[k]}</span></span>`;
+  document.getElementById('filterbar').innerHTML =
+    chip('all','すべて','')+
+    chip('pub','公開','var(--green)')+
+    chip('stop','停止','var(--red)')+
+    chip('rsv','予約','var(--amber)')+
+    chip('soon','SSL期限間近','',true)+
+    chip('exp','期限切れ','')+
+    `<span class="spacer"></span><span class="basedate">基準日 2026/06/06</span>`;
+}
+function setFilter(k){activeFilter=k;renderFilterBar();renderList();}
+
+// ---- list view ----
+function flatten(node,arr){ (node.c||[]).forEach(ch=>{arr.push(ch);flatten(ch,arr);}); return arr; }
+function healthStrip(root){
+  const desc=flatten(root,[]);
+  const rsv=desc.some(n=>n.s==='rsv'), stop=desc.some(n=>n.s==='stop');
+  return `<div class="health"><span class="bar"></span>`+
+    (rsv?`<span class="sq" style="background:var(--amber)"></span>`:'')+
+    (stop?`<span class="sq" style="background:var(--red)"></span>`:'')+`</div>`;
+}
+function rowHTML(n){
+  const labels=n.labels, leaf=labels[0];
+  const rest = labels.length>1 ? '.'+labels.slice(1).join('.') : '';
+  const indent = (n.depth-1)*22;
+  const guide = n.depth>1 ? `<span class="guide" style="padding-left:${indent}px">└ </span>` : (n.depth===1?'':'');
+  const st=STATUS[n.s];
+  return `<tr data-fqdn="${n.fqdn}" onclick="select('${n.fqdn}')">
+    <td><span class="path">${guide}<span><span class="leaf">${leaf}</span><span class="rest">${rest}</span></span><span class="lbadge">L${n.depth}</span></span></td>
+    <td><span class="pill ${st.cls}"><span class="d"></span>${st.label}</span></td>
+    <td><span class="owner">${avatar(n.o)}<span>${n.o}</span></span></td>
+    <td><span class="ssl">${n.ssl} ${sslWarn(n.ssl)}</span></td>
+  </tr>`;
+}
+function renderList(){
+  let shown=0;
+  const html = DATA.map(root=>{
+    const rows = flatten(root,[]).filter(n=>matchFilter(n)&&matchQuery(n));
+    if(rows.length===0 && (activeFilter!=='all'||query)) return '';
+    shown += rows.length + 1; // +1 for the root domain itself
+    const st=STATUS[root.s];
+    return `<div class="group" id="g-${root.l}">
+      <div class="ghead" onclick="toggleGroup('${root.l}')">
+        <span class="caret">▾</span><span class="gicon">🌐</span>
+        <span class="groot">${root.l}</span>
+        <span class="pill ${st.cls}"><span class="d"></span>${st.label}</span>
+        <span class="gsub">サブドメイン ${root.descCount} 件</span>
+        ${healthStrip(root)}
+      </div>
+      <table>
+        <thead><tr><th>ドメイン（フルパス）</th><th class="c-status">ステータス</th><th class="c-owner">担当者</th><th class="c-ssl">SSL有効期限</th></tr></thead>
+        <tbody>${rows.map(rowHTML).join('')}</tbody>
+      </table>
+    </div>`;
+  }).join('');
+  document.getElementById('groups').innerHTML = html || `<div class="dempty">該当するドメインがありません</div>`;
+  document.getElementById('shownCount').textContent = shown;
+  if(selected) markRow(selected.fqdn);
+}
+function toggleGroup(l){document.getElementById('g-'+l).classList.toggle('collapsed');}
+
+// ---- tree (miller columns) ----
+let treePath=[]; // array of nodes from root to selected
+function findNode(fqdn){return ALL.find(n=>n.fqdn===fqdn);}
+function renderTree(){
+  // columns: roots, then children of each selected node along path
+  const cols=[{title:'ルートドメイン',icon:'🌐',items:DATA,sel:treePath[0]}];
+  treePath.forEach((n,i)=>{ if(n.c&&n.c.length) cols.push({title:n.l,icon:'📁',items:n.c,sel:treePath[i+1]}); });
+  document.getElementById('treeCols').innerHTML = cols.map((col,ci)=>{
+    return `<div class="col"><div class="colhead">${col.icon} ${col.title}<span class="n">${col.items.length}</span></div>`+
+      col.items.map(n=>{
+        const has=n.c&&n.c.length;
+        const dotc = n.s==='pub'?'var(--green)':n.s==='stop'?'var(--red)':'var(--amber)';
+        const sel = col.sel===n ? 'sel':'';
+        return `<div class="cell ${sel}" onclick="treeClick('${n.fqdn}',${ci})">
+          <span class="d" style="background:${dotc}"></span><span>${n.l}</span>
+          <span class="chev">${has?'›':'—'}</span></div>`;
+      }).join('')+`</div>`;
+  }).join('');
+  // breadcrumb
+  const cr = treePath.length
+    ? `<span class="ic">🗂</span>`+treePath.map((n,i)=>`${i?'<span class="sepc">›</span>':''}<span class="${i===treePath.length-1?'':''}">${i===treePath.length-1?`<b>${n.l}</b>`:n.l}</span>`).join('')
+    : `<span class="ic">🗂</span>ルートドメインを選択`;
+  document.getElementById('treeCrumb').innerHTML = cr;
+}
+function treeClick(fqdn,colIndex){
+  const n=findNode(fqdn);
+  treePath = treePath.slice(0,colIndex);
+  treePath.push(n);
+  renderTree();
+  select(fqdn,true);
+}
+
+// ---- selection + drawer ----
+let selected=null;
+function markRow(fqdn){
+  document.querySelectorAll('#groups tr').forEach(tr=>tr.classList.toggle('sel',tr.dataset.fqdn===fqdn));
+}
+function select(fqdn, fromTree){
+  selected=findNode(fqdn);
+  markRow(fqdn);
+  if(!fromTree){ // sync tree path so switching views keeps context
+    treePath=[]; let n=selected; const chain=[]; while(n){chain.unshift(n);n=n.parent;} treePath=chain;
+  } else { renderTree(); }
+  renderDrawer();
+}
+function renderDrawer(){
+  const d=document.getElementById('drawer');
+  if(!selected){d.innerHTML=`<div class="dempty">ドメインを選択してください</div>`;return;}
+  const n=selected, st=STATUS[n.s];
+  const crumb = n.labels.slice().reverse();
+  const parentFqdn = n.labels.length>2 ? n.labels.slice(1).join('.') : '—';
+  const dns = n.dns || [['A','203.0.113.'+(10+ (n.fqdn.length%80))]];
+  d.innerHTML = `<div class="dwrap">
+    <div class="dtitle"><h2>${n.fqdn}</h2><button class="x" onclick="closeDrawer()">×</button></div>
+    <div class="dcrumb">${crumb.map((p,i)=>`${i?'<span class="sepc">›</span>':''}${p}`).join('')}</div>
+    <div class="dstatus"><span class="pill ${st.cls}"><span class="d"></span>${st.label}</span>
+      <span class="ssl">SSL ${n.ssl} ${sslWarn(n.ssl)}</span></div>
+
+    <div class="sechead">基本情報</div>
+    <div class="kv"><span class="k">階層</span><span class="v">第 ${n.tier} 階層 （L${n.depth}）</span></div>
+    <div class="kv"><span class="k">管理部署</span><span class="v">${n.dept||'—'}</span></div>
+    <div class="kv"><span class="k">担当者</span><span class="v">${avatar(n.o)} ${n.o}</span></div>
+    <div class="kv"><span class="k">サブドメイン</span><span class="v">${(n.c||[]).length} 件（配下 ${n.descCount} 件）</span></div>
+    <div class="kv"><span class="k">親ドメイン</span><span class="v mono">${parentFqdn}</span></div>
+
+    <div class="sechead">DNSレコード</div>
+    <div class="dns">${dns.map(r=>`<div class="rec"><span class="rt">${r[0]}</span><span class="rv">${r[1]}</span></div>`).join('')}</div>
+
+    <div class="dbtns"><button class="dbtn">✎ 編集</button><button class="dbtn">↗ サイトを開く</button></div>
+  </div>`;
+}
+function closeDrawer(){selected=null;markRow('');renderDrawer();}
+
+// ---- view switch ----
+function setView(v){
+  document.getElementById('listView').style.display = v==='list'?'block':'none';
+  document.getElementById('treeView').style.display = v==='tree'?'block':'none';
+  document.getElementById('tabList').classList.toggle('active',v==='list');
+  document.getElementById('tabTree').classList.toggle('active',v==='tree');
+  if(v==='tree') renderTree();
+}
+
+// ---- search ----
+document.getElementById('search').addEventListener('input',e=>{query=e.target.value;renderList();});
+document.addEventListener('keydown',e=>{if(e.key==='/'&&e.target.tagName!=='INPUT'){e.preventDefault();document.getElementById('search').focus();}});
+
+// ---- init ----
+document.getElementById('totalCount').textContent=ALL.length;
+renderFilterBar();
+renderList();
+select('mail.dev.business.mb.softbank.jp'); // mirror screenshot default
+</script>
+</body>
+</html>
