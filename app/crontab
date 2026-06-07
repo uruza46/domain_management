@@ -1,0 +1,9 @@
+# Domain Management – collection batch schedule
+# Syntax: min hour day month weekday command
+
+# Run full batch collection every hour
+0 * * * * python /app/manage.py run_batch_collection
+
+# Enqueue-only pass every 15 min (lightweight; skips already-queued domains via dedup)
+# Uncomment when higher-frequency enqueue is needed:
+# */15 * * * * python /app/manage.py enqueue_collection_jobs

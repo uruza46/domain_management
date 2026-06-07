@@ -128,3 +128,36 @@ class CollectionResult(models.Model):
 
     def __str__(self):
         return f"{self.domain.fqdn} / {self.result_type} / {self.status}"
+
+
+class BatchRun(models.Model):
+    STATUS_RUNNING = "running"
+    STATUS_SUCCEEDED = "succeeded"
+    STATUS_PARTIAL = "partial"
+    STATUS_FAILED = "failed"
+    STATUS_CHOICES = [
+        (STATUS_RUNNING, "running"),
+        (STATUS_SUCCEEDED, "succeeded"),
+        (STATUS_PARTIAL, "partial"),
+        (STATUS_FAILED, "failed"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    started_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_RUNNING)
+    requested_types = models.JSONField(default=list)
+    enqueued_count = models.PositiveIntegerField(default=0)
+    processed_count = models.PositiveIntegerField(default=0)
+    succeeded_count = models.PositiveIntegerField(default=0)
+    failed_count = models.PositiveIntegerField(default=0)
+    error_message = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-started_at"]
+        indexes = [
+            models.Index(fields=["status", "started_at"], name="idx_batch_run_status"),
+        ]
+
+    def __str__(self):
+        return f"BatchRun {self.started_at:%Y-%m-%d %H:%M} / {self.status}"
