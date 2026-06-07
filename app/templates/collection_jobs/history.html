@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Collection History{% endblock %}
+{% block nav_history %}active{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="page-title mb-0">収集結果履歴</h1>
+</div>
+
+<form method="get" class="row g-2 mb-3 align-items-end">
+  <div class="col-auto"><input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="Domain"></div>
+  <div class="col-auto">
+    <select name="type" class="form-select form-select-sm">
+      <option value="">type: all</option>
+      {% for t in result_types %}<option value="{{ t }}"{% if filter_type == t %} selected{% endif %}>{{ t }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="col-auto">
+    <select name="status" class="form-select form-select-sm">
+      <option value="">status: all</option>
+      <option value="succeeded"{% if filter_status == "succeeded" %} selected{% endif %}>succeeded</option>
+      <option value="failed"{% if filter_status == "failed" %} selected{% endif %}>failed</option>
+      <option value="skipped"{% if filter_status == "skipped" %} selected{% endif %}>skipped</option>
+    </select>
+  </div>
+  <div class="col-auto">
+    <select name="trigger" class="form-select form-select-sm">
+      <option value="">trigger: all</option>
+      <option value="manual"{% if filter_trigger == "manual" %} selected{% endif %}>manual</option>
+      <option value="scheduled"{% if filter_trigger == "scheduled" %} selected{% endif %}>scheduled</option>
+    </select>
+  </div>
+  <div class="col-auto"><input class="form-control form-control-sm" type="date" name="date_from" value="{{ date_from }}"></div>
+  <div class="col-auto"><input class="form-control form-control-sm" type="date" name="date_to" value="{{ date_to }}"></div>
+  <div class="col-auto">
+    <div class="form-check form-check-inline mt-1">
+      <input class="form-check-input" type="checkbox" name="changed" value="1" id="changedOnlyGlobal"{% if filter_changed == "1" %} checked{% endif %}>
+      <label class="form-check-label small" for="changedOnlyGlobal">changed only</label>
+    </div>
+  </div>
+  <div class="col-auto"><button type="submit" class="btn btn-sm btn-outline-secondary">Filter</button></div>
+</form>
+
+<div class="card shadow-sm border-0">
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Observed</th><th>Domain</th><th>Type</th><th>Trigger</th><th>Method</th><th>Source</th><th>Status</th><th>Changed</th><th>Summary / Error</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in page_obj.object_list %}
+        <tr>
+          <td class="small" style="font-family:monospace"><a href="{% url 'collection_result_detail' r.id %}">{{ r.observed_at|date:"Y-m-d H:i" }}</a></td>
+          <td class="small" style="font-family:monospace">{{ r.domain.fqdn }}</td>
+          <td class="small">{{ r.result_type }}</td>
+          <td class="small">{{ r.job.trigger_type }}</td>
+          <td class="small">{{ r.method }}</td>
+          <td class="small">{{ r.source_name }}</td>
+          <td class="small">{{ r.status }}</td>
+          <td class="small text-center">{% if r.changed %}yes{% else %}-{% endif %}</td>
+          <td class="small text-muted">{{ r.raw_summary|default:r.error_message }}</td>
+          <td class="small"><a href="{% url 'collection_result_detail' r.id %}">detail</a></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="10" class="text-center text-muted py-4 small">No collection results</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
