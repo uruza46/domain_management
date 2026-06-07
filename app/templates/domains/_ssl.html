@@ -1,0 +1,3 @@
+<span style="font-family:monospace">{% if expiry %}{{ expiry|date:'Y/m/d' }}{% else %}-{% endif %}</span>
+{% if state == 'soon' %}<span class="ssl-warn ssl-soon">期限間近</span>
+{% elif state == 'expired' %}<span class="ssl-warn ssl-exp">期限切れ</span>{% endif %}

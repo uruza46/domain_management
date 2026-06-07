@@ -1,0 +1,60 @@
+{% load ledger_extras %}
+<div class="text-muted small mb-2">{{ groups|length }} グループ表示</div>
+{% for group in groups %}
+<div class="ledger-group mb-3">
+  <div class="d-flex align-items-center gap-2 px-1 py-2 border-bottom">
+    <i class="bi bi-globe2 text-secondary"></i>
+    <span style="font-family:monospace;font-weight:700">{{ group.root.domain.fqdn }}</span>
+    {% include "domains/_status_pill.html" with status=group.root.domain.status %}
+    <span class="text-muted small">サブドメイン {{ group.root.descendant_count }} 件</span>
+  </div>
+  <table class="table table-sm mb-0" style="font-size:.82rem">
+    <thead style="background:#fcfcfd">
+      <tr>
+        <th>ドメイン（フルパス）</th>
+        <th style="width:110px">ステータス</th>
+        <th style="width:150px">担当者</th>
+        <th style="width:160px">SSL有効期限</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="ledger-row" tabindex="0" style="cursor:pointer"
+          data-role="ledger-row"
+          data-domain-id="{{ group.root.domain.id }}"
+          data-fqdn="{{ group.root.domain.fqdn }}"
+          data-parent-fqdn=""
+          data-panel-url="{% url 'domain_panel' group.root.domain.id %}">
+        <td style="font-family:monospace">
+          <strong>{{ group.root.domain.fqdn|leaf_label }}</strong><span class="text-muted">{{ group.root.domain.fqdn|rest_label }}</span>
+          <span class="badge bg-light text-secondary border ms-1">L0</span>
+        </td>
+        <td>{% include "domains/_status_pill.html" with status=group.root.domain.status %}</td>
+        <td>{% include "domains/_owner.html" with domain=group.root.domain %}</td>
+        <td>{% include "domains/_ssl.html" with expiry=group.root.ssl_expiry state=group.root.ssl_state %}</td>
+      </tr>
+      {% for node in group.rows %}
+      <tr class="ledger-row" tabindex="0" style="cursor:pointer"
+          data-role="ledger-row"
+          data-domain-id="{{ node.domain.id }}"
+          data-fqdn="{{ node.domain.fqdn }}"
+          data-parent-fqdn="{% if node.domain.parent_domain %}{{ node.domain.parent_domain.fqdn }}{% endif %}"
+          data-panel-url="{% url 'domain_panel' node.domain.id %}">
+        <td style="font-family:monospace">
+          <span style="display:inline-block;width:{% indent_px node.depth %}px"></span>
+          {% if node.depth > 1 %}<span class="text-muted">└</span>{% endif %}
+          <strong>{{ node.domain.fqdn|leaf_label }}</strong><span class="text-muted">{{ node.domain.fqdn|rest_label }}</span>
+          <span class="badge bg-light text-secondary border ms-1">L{{ node.depth }}</span>
+        </td>
+        <td>{% include "domains/_status_pill.html" with status=node.domain.status %}</td>
+        <td>{% include "domains/_owner.html" with domain=node.domain %}</td>
+        <td>{% include "domains/_ssl.html" with expiry=node.ssl_expiry state=node.ssl_state %}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="4" class="text-center text-muted py-3">該当なし</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% empty %}
+<div class="text-center text-muted py-5">該当するドメインがありません</div>
+{% endfor %}

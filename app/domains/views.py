@@ -1,10 +1,23 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .importers import ImportResult, parse_csv_file, parse_zone_file
 from .models import Domain
+from .services import (
+    STATUS_DISPLAY,
+    avatar_color,
+    build_domain_groups,
+    build_forest,
+    classify_ssl,
+    domain_dept,
+    domain_owner,
+    latest_cert_expiry,
+    ledger_counts,
+    visible_groups,
+)
 
 
 @login_required
@@ -31,23 +44,23 @@ def import_preview(request):
 
     if file_type not in ("zone", "csv"):
         results = [ImportResult(fqdn="", action="error", error_message="ファイル種別が不正です")]
-        return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type})
+        return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type, "create_count": 0, "skip_count": 0, "error_count": 1})
 
     if not uploaded:
         results = [ImportResult(fqdn="", action="error", error_message="ファイルが選択されていません")]
-        return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type})
+        return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type, "create_count": 0, "skip_count": 0, "error_count": 1})
 
     try:
         content = uploaded.read().decode("utf-8")
     except UnicodeDecodeError:
         results = [ImportResult(fqdn="", action="error", error_message="UTF-8 でデコードできません")]
-        return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type})
+        return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type, "create_count": 0, "skip_count": 0, "error_count": 1})
 
     if file_type == "zone":
         origin = request.POST.get("origin", "").strip()
         if not origin:
             results = [ImportResult(fqdn="", action="error", error_message="ゾーンオリジンを入力してください")]
-            return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type})
+            return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type, "create_count": 0, "skip_count": 0, "error_count": 1})
         results = parse_zone_file(content, origin=origin)
     else:
         results = parse_csv_file(content)
@@ -84,8 +97,6 @@ def import_preview(request):
 @login_required
 @require_POST
 def import_commit(request):
-    from django.utils import timezone
-
     from dns_info.models import DnsRecord
     from owners.models import ManagementUnit
 
@@ -150,3 +161,101 @@ def import_commit(request):
 
     messages.success(request, f"{created_count} 件を登録しました")
     return redirect("dashboard")
+
+
+def _load_domains():
+    return list(
+        Domain.objects.select_related(
+            "parent_domain",
+            "management_unit",
+            "management_unit__mgmt_dept",
+            "management_unit__primary_owner",
+            "management_unit__mgmt_owner",
+        )
+        .prefetch_related("certificates", "dns_records")
+        .order_by("fqdn_reversed")
+    )
+
+
+def _panel_context(domain, today):
+    labels = domain.fqdn.split(".")
+    expiry = latest_cert_expiry(domain)
+    parent = domain.fqdn.split(".", 1)[1] if "." in domain.fqdn else "-"
+    owner = domain_owner(domain)
+    return {
+        "domain": domain,
+        "status_label": STATUS_DISPLAY.get(domain.status, (domain.status, "pending"))[0],
+        "status_cls": STATUS_DISPLAY.get(domain.status, (domain.status, "pending"))[1],
+        "tier": len(labels),
+        "crumb": list(reversed(labels)),
+        "parent_fqdn": parent,
+        "owner": owner,
+        "owner_color": avatar_color(str(owner)) if owner else "#64748b",
+        "dept": domain_dept(domain),
+        "ssl_expiry": expiry,
+        "ssl_state": classify_ssl(expiry, today),
+        "dns_records": list(domain.dns_records.all()),
+    }
+
+
+@login_required
+def domain_ledger(request):
+    today = timezone.localdate()
+    fkey = request.GET.get("status", "")
+    q = request.GET.get("q", "").strip()
+    view_mode = request.GET.get("view", "list")
+
+    domains = _load_domains()
+    groups, _index = build_domain_groups(domains, today)
+    counts = ledger_counts(domains, today)
+    shown = visible_groups(groups, fkey, q)
+
+    list_context = {"groups": shown, "today": today, "fkey": fkey, "q": q, "view_mode": view_mode}
+    if request.GET.get("partial") == "list":
+        return render(request, "domains/_list.html", list_context)
+
+    roots = [group.root for group in groups]
+    selected = roots[0] if roots else None
+    context = {
+        "counts": counts,
+        "fkey": fkey,
+        "q": q,
+        "view_mode": view_mode,
+        "roots": roots,
+        "selected": selected,
+        "total": len(domains),
+        "today": today,
+        **list_context,
+    }
+    if selected is not None:
+        context["panel"] = _panel_context(selected.domain, today)
+    return render(request, "domains/ledger.html", context)
+
+
+@login_required
+def domain_panel(request, pk):
+    today = timezone.localdate()
+    domain = get_object_or_404(
+        Domain.objects.select_related(
+            "parent_domain",
+            "management_unit",
+            "management_unit__mgmt_dept",
+            "management_unit__primary_owner",
+            "management_unit__mgmt_owner",
+        ).prefetch_related("certificates", "dns_records"),
+        pk=pk,
+    )
+    return render(request, "domains/_panel.html", _panel_context(domain, today))
+
+
+@login_required
+def domain_tree_children(request, pk):
+    today = timezone.localdate()
+    domains = _load_domains()
+    _roots, index = build_forest(domains, today)
+    node = index.get(pk)
+    return render(
+        request,
+        "domains/_tree_column.html",
+        {"title": node.domain.fqdn if node else "", "nodes": node.children if node else [], "depth": node.depth + 1 if node else 0},
+    )
