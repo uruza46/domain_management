@@ -203,6 +203,89 @@ def test_certificate_collector_returns_stub_outcome(domain):
     assert outcome.status == CollectionResult.STATUS_SUCCEEDED
 
 
+# ---------------------------------------------------------------------------
+# CertificateCollector — Task 5
+# ---------------------------------------------------------------------------
+
+import json as _json
+
+
+def _mock_urlopen_response(data):
+    body = _json.dumps(data).encode()
+    resp = MagicMock()
+    resp.read.return_value = body
+    resp.__enter__ = lambda s: s
+    resp.__exit__ = MagicMock(return_value=False)
+    return resp
+
+
+@pytest.mark.django_db
+def test_certificate_collector_returns_cert_list(domain):
+    certs = [
+        {
+            "common_name": "example.co.jp",
+            "issuer_name": "R10, Let's Encrypt",
+            "not_before": "2024-01-01T00:00:00",
+            "not_after": "2024-04-01T00:00:00",
+        }
+    ]
+    with patch("collection_jobs.collectors.urllib.request.urlopen",
+               return_value=_mock_urlopen_response(certs)):
+        outcome = CertificateCollector().collect(domain)
+
+    assert outcome.status == CollectionResult.STATUS_SUCCEEDED
+    assert outcome.result_type == CollectionResult.TYPE_CERTIFICATE
+    assert outcome.method == CollectionResult.METHOD_CT_LOG
+    assert len(outcome.payload["certificates"]) == 1
+    assert outcome.payload["certificates"][0]["common_name"] == "example.co.jp"
+    assert outcome.payload["certificates"][0]["issuer"] == "R10, Let's Encrypt"
+
+
+@pytest.mark.django_db
+def test_certificate_collector_handles_empty_response(domain):
+    with patch("collection_jobs.collectors.urllib.request.urlopen",
+               return_value=_mock_urlopen_response([])):
+        outcome = CertificateCollector().collect(domain)
+
+    assert outcome.status == CollectionResult.STATUS_SUCCEEDED
+    assert outcome.payload["certificates"] == []
+
+
+@pytest.mark.django_db
+def test_certificate_collector_deduplicates_certs(domain):
+    certs = [
+        {"common_name": "example.co.jp", "issuer_name": "CA",
+         "not_before": "2024-01-01", "not_after": "2024-04-01"},
+        {"common_name": "example.co.jp", "issuer_name": "CA",
+         "not_before": "2024-01-01", "not_after": "2024-04-01"},
+    ]
+    with patch("collection_jobs.collectors.urllib.request.urlopen",
+               return_value=_mock_urlopen_response(certs)):
+        outcome = CertificateCollector().collect(domain)
+
+    assert len(outcome.payload["certificates"]) == 1
+
+
+@pytest.mark.django_db
+def test_certificate_collector_handles_timeout(domain):
+    with patch("collection_jobs.collectors.urllib.request.urlopen",
+               side_effect=socket.timeout("timed out")):
+        outcome = CertificateCollector().collect(domain)
+
+    assert outcome.status == CollectionResult.STATUS_FAILED
+    assert outcome.error_code == "timeout"
+
+
+@pytest.mark.django_db
+def test_certificate_collector_handles_network_error(domain):
+    with patch("collection_jobs.collectors.urllib.request.urlopen",
+               side_effect=urllib.error.URLError("connection refused")):
+        outcome = CertificateCollector().collect(domain)
+
+    assert outcome.status == CollectionResult.STATUS_FAILED
+    assert outcome.error_code == "connection_error"
+
+
 @pytest.mark.django_db
 def test_registration_collector_returns_stub_outcome(domain):
     outcome = RegistrationCollector().collect(domain)

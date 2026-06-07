@@ -222,16 +222,72 @@ class MailAuthCollector:
 
 class CertificateCollector:
     result_type = CollectionResult.TYPE_CERTIFICATE
+    MAX_CERTS = 20
 
     def collect(self, domain) -> CollectionOutcome:
-        return CollectionOutcome(
-            result_type=self.result_type,
-            method=CollectionResult.METHOD_CT_LOG,
-            source_name="stub",
-            status=CollectionResult.STATUS_SUCCEEDED,
-            payload={},
-            raw_summary="[stub] certificate collection not yet implemented",
-        )
+        import json
+        url = f"https://crt.sh/?q=%.{domain.fqdn}&output=json"
+        start = time.monotonic()
+        req = urllib.request.Request(url)
+        req.add_header("User-Agent", "DomainManagement/1.0")
+
+        try:
+            with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as response:
+                data = json.loads(response.read().decode())
+            duration_ms = int((time.monotonic() - start) * 1000)
+
+            certs = []
+            seen = set()
+            for entry in data:
+                key = (entry.get("common_name"), entry.get("not_before"), entry.get("not_after"))
+                if key in seen:
+                    continue
+                seen.add(key)
+                certs.append({
+                    "common_name": entry.get("common_name"),
+                    "issuer": entry.get("issuer_name", ""),
+                    "not_before": entry.get("not_before"),
+                    "not_after": entry.get("not_after"),
+                })
+                if len(certs) >= self.MAX_CERTS:
+                    break
+
+            return CollectionOutcome(
+                result_type=self.result_type,
+                method=CollectionResult.METHOD_CT_LOG,
+                source_name="crt.sh",
+                status=CollectionResult.STATUS_SUCCEEDED,
+                payload={"certificates": certs},
+                raw_summary=f"{len(certs)} certificate(s)",
+                duration_ms=duration_ms,
+            )
+        except socket.timeout:
+            duration_ms = int((time.monotonic() - start) * 1000)
+            return CollectionOutcome(
+                result_type=self.result_type,
+                method=CollectionResult.METHOD_CT_LOG,
+                source_name="crt.sh",
+                status=CollectionResult.STATUS_FAILED,
+                error_code="timeout",
+                error_message="crt.sh request timed out",
+                duration_ms=duration_ms,
+            )
+        except urllib.error.URLError as exc:
+            duration_ms = int((time.monotonic() - start) * 1000)
+            reason = getattr(exc, "reason", None)
+            if isinstance(reason, (socket.timeout, TimeoutError)):
+                error_code, error_message = "timeout", "crt.sh request timed out"
+            else:
+                error_code, error_message = "connection_error", str(exc)[:200]
+            return CollectionOutcome(
+                result_type=self.result_type,
+                method=CollectionResult.METHOD_CT_LOG,
+                source_name="crt.sh",
+                status=CollectionResult.STATUS_FAILED,
+                error_code=error_code,
+                error_message=error_message,
+                duration_ms=duration_ms,
+            )
 
 
 class RegistrationCollector:
