@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}収集履歴 - {{ domain.fqdn }}{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-3">
+  <a href="{% url 'domain_ledger' %}" class="text-decoration-none text-muted small">台帳</a>
+  <span class="text-muted small">/</span>
+  <span class="small" style="font-family:monospace">{{ domain.fqdn }}</span>
+  <span class="text-muted small">/</span>
+  <span class="small">収集履歴</span>
+</div>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="page-title mb-0">情報収集履歴</h1>
+  <form hx-post="{% url 'collection_request' domain.id %}" hx-target="#collection-request-result" hx-swap="innerHTML" class="d-flex align-items-center gap-2">
+    {% csrf_token %}
+    <input type="hidden" name="types" value="dns_records">
+    <input type="hidden" name="types" value="certificate">
+    <button class="btn btn-sm btn-primary" type="submit">収集リクエスト</button>
+    <span id="collection-request-result" class="small text-muted"></span>
+  </form>
+</div>
+
+<form method="get" class="row g-2 mb-3 align-items-end">
+  <div class="col-auto">
+    <select name="type" class="form-select form-select-sm">
+      <option value="">種別: すべて</option>
+      {% for t in result_types %}
+      <option value="{{ t }}"{% if filter_type == t %} selected{% endif %}>{{ t }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-auto">
+    <select name="status" class="form-select form-select-sm">
+      <option value="">ステータス: すべて</option>
+      <option value="succeeded"{% if filter_status == "succeeded" %} selected{% endif %}>succeeded</option>
+      <option value="failed"{% if filter_status == "failed" %} selected{% endif %}>failed</option>
+      <option value="skipped"{% if filter_status == "skipped" %} selected{% endif %}>skipped</option>
+    </select>
+  </div>
+  <div class="col-auto">
+    <select name="trigger" class="form-select form-select-sm">
+      <option value="">実行種別: すべて</option>
+      <option value="manual"{% if filter_trigger == "manual" %} selected{% endif %}>manual</option>
+      <option value="scheduled"{% if filter_trigger == "scheduled" %} selected{% endif %}>scheduled</option>
+    </select>
+  </div>
+  <div class="col-auto">
+    <div class="form-check form-check-inline mt-1">
+      <input class="form-check-input" type="checkbox" name="changed" value="1" id="changedOnly"{% if filter_changed == "1" %} checked{% endif %}>
+      <label class="form-check-label small" for="changedOnly">差分ありのみ</label>
+    </div>
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-sm btn-outline-secondary">絞り込み</button>
+  </div>
+</form>
+
+<div class="card shadow-sm border-0">
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th class="small text-muted">観測日時</th>
+          <th class="small text-muted">種別</th>
+          <th class="small text-muted">実行種別</th>
+          <th class="small text-muted">方法</th>
+          <th class="small text-muted">取得元</th>
+          <th class="small text-muted">ステータス</th>
+          <th class="small text-muted">差分</th>
+          <th class="small text-muted">概要/エラー</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in results %}
+        <tr>
+          <td class="small" style="font-family:monospace;white-space:nowrap">{{ r.observed_at|date:"Y-m-d H:i" }}</td>
+          <td class="small">{{ r.result_type }}</td>
+          <td class="small">{{ r.job.trigger_type }}</td>
+          <td class="small">{{ r.method }}</td>
+          <td class="small">{{ r.source_name }}</td>
+          <td class="small">
+            {% if r.status == "succeeded" %}
+            <span class="badge bg-success-subtle text-success">{{ r.status }}</span>
+            {% elif r.status == "failed" %}
+            <span class="badge bg-danger-subtle text-danger">{{ r.status }}</span>
+            {% else %}
+            <span class="badge bg-secondary-subtle text-secondary">{{ r.status }}</span>
+            {% endif %}
+          </td>
+          <td class="small text-center">{% if r.changed %}<span class="text-warning">&#x25CF;</span>{% endif %}</td>
+          <td class="small text-muted">{{ r.raw_summary|default:r.error_message }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="text-center text-muted py-4 small">収集履歴はありません</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

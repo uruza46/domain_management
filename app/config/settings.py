@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     "incidents",
     "approvals",
     "notifications",
+    "collection_jobs",
     "api",
 ]
 

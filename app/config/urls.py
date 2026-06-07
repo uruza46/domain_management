@@ -12,4 +12,5 @@ urlpatterns = [
     path("domains/", include("domains.urls")),
     path("owners/", include("owners.urls")),
     path("requests/", include("requests.urls")),
+    path("collections/", include("collection_jobs.urls")),
 ]
