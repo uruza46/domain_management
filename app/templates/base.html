@@ -84,8 +84,18 @@
   document.body.addEventListener('htmx:configRequest', function (e) {
     e.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
   });
-  document.querySelectorAll('#toast-container .toast').forEach(function (el) {
-    new bootstrap.Toast(el, { delay: 4000 }).show();
+  function showPendingToasts(root) {
+    (root || document).querySelectorAll('#toast-container .toast:not([data-toast-ready])').forEach(function (el) {
+      el.dataset.toastReady = 'true';
+      new bootstrap.Toast(el, { delay: 4000 }).show();
+    });
+  }
+  showPendingToasts(document);
+  document.body.addEventListener('htmx:afterSwap', function () {
+    showPendingToasts(document);
+  });
+  document.body.addEventListener('htmx:oobAfterSwap', function () {
+    showPendingToasts(document);
   });
 </script>
 </body>

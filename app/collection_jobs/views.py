@@ -5,6 +5,7 @@ from django.http import HttpResponse
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, render
 from django.utils.dateparse import parse_date
+from django.utils.html import escape
 
 from domains.models import Domain
 
@@ -44,7 +45,28 @@ def request_domain_collection(request, pk):
         requested_by=request.user,
         priority=priority,
     )
-    return HttpResponse('<span class="text-success">収集リクエスト受付済み</span>')
+    domain_name = escape(domain.fqdn)
+    types_text = escape(", ".join(requested_types))
+    status_text = "High priority" if priority == CollectionJob.PRIORITY_HIGH else "Queued"
+    html = f"""
+<span id="collection-request-result" class="small text-success">
+  {escape(status_text)}: {types_text}
+</span>
+<div id="toast-container" hx-swap-oob="beforeend">
+  <div class="toast border-0 rounded-3 shadow-lg" style="background:rgba(28,28,30,0.95);min-width:320px" role="alert" aria-live="assertive">
+    <div class="d-flex align-items-start gap-3 p-3">
+      <i class="bi bi-arrow-repeat text-info fs-5 flex-shrink-0 mt-1"></i>
+      <div class="flex-grow-1 text-white">
+        <div class="fw-semibold">Collection request queued</div>
+        <div class="small text-white-50">{domain_name}</div>
+        <div class="small text-white-50">{types_text}</div>
+      </div>
+      <button type="button" class="btn-close btn-close-white flex-shrink-0" style="opacity:.5" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+"""
+    return HttpResponse(html)
 
 
 @login_required

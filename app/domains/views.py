@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
@@ -22,11 +24,25 @@ from .services import (
 
 @login_required
 def dashboard(request):
+    from collection_jobs.models import BatchRun, CollectionJob, CollectionResult
+
+    recent_failure_window = timezone.now() - timedelta(days=7)
     context = {
         "managed_count": Domain.objects.filter(mgmt_category=Domain.CATEGORY_MANAGED).count(),
         "individual_count": Domain.objects.filter(mgmt_category=Domain.CATEGORY_INDIVIDUAL).count(),
         "expiring_count": Domain.objects.filter(expires_at__isnull=False).count(),
         "inventory_unanswered_count": 0,
+        "collected_count": Domain.objects.filter(collected_at__isnull=False).count(),
+        "uncollected_count": Domain.objects.filter(collected_at__isnull=True).count(),
+        "active_collection_job_count": CollectionJob.objects.filter(
+            status__in=[CollectionJob.STATUS_QUEUED, CollectionJob.STATUS_RUNNING]
+        ).count(),
+        "recent_failed_result_count": CollectionResult.objects.filter(
+            status=CollectionResult.STATUS_FAILED,
+            observed_at__gte=recent_failure_window,
+        ).count(),
+        "latest_batch": BatchRun.objects.order_by("-started_at").first(),
+        "recent_collection_results": CollectionResult.objects.select_related("domain").order_by("-observed_at")[:5],
     }
     return render(request, "dashboard.html", context)
 
@@ -178,10 +194,38 @@ def _load_domains():
 
 
 def _panel_context(domain, today):
+    from collection_jobs.models import CollectionResult
+
     labels = domain.fqdn.split(".")
     expiry = latest_cert_expiry(domain)
     parent = domain.fqdn.split(".", 1)[1] if "." in domain.fqdn else "-"
     owner = domain_owner(domain)
+    dns_records = list(domain.dns_records.all())
+    dns_record_groups = []
+    for record_type in ["A", "AAAA", "CNAME", "MX", "NS", "TXT"]:
+        records = [record for record in dns_records if record.record_type == record_type]
+        if records:
+            dns_record_groups.append((record_type, records))
+    latest_dns_result = (
+        CollectionResult.objects
+        .filter(
+            domain=domain,
+            result_type=CollectionResult.TYPE_DNS_RECORDS,
+            status=CollectionResult.STATUS_SUCCEEDED,
+        )
+        .order_by("-observed_at", "-collected_at")
+        .first()
+    )
+    latest_dns_failed_result = (
+        CollectionResult.objects
+        .filter(
+            domain=domain,
+            result_type=CollectionResult.TYPE_DNS_RECORDS,
+            status=CollectionResult.STATUS_FAILED,
+        )
+        .order_by("-observed_at", "-collected_at")
+        .first()
+    )
     return {
         "domain": domain,
         "status_label": STATUS_DISPLAY.get(domain.status, (domain.status, "pending"))[0],
@@ -194,7 +238,10 @@ def _panel_context(domain, today):
         "dept": domain_dept(domain),
         "ssl_expiry": expiry,
         "ssl_state": classify_ssl(expiry, today),
-        "dns_records": list(domain.dns_records.all()),
+        "dns_records": dns_records,
+        "dns_record_groups": dns_record_groups,
+        "latest_dns_result": latest_dns_result,
+        "latest_dns_failed_result": latest_dns_failed_result,
     }
 
 

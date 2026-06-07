@@ -45,6 +45,23 @@ def test_request_collection_creates_manual_job(auth_client, domain):
 
 
 @pytest.mark.django_db
+def test_request_collection_returns_inline_status_and_oob_toast(auth_client, domain):
+    response = auth_client.post(
+        f"/collections/domains/{domain.id}/request/",
+        {"types": ["dns_records", "certificate"]},
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert response.status_code == 200
+    body = response.content.decode()
+    assert "collection-request-result" in body
+    assert "hx-swap-oob" in body
+    assert "toast-container" in body
+    assert "example.co.jp" in body
+    assert "dns_records" in body
+
+
+@pytest.mark.django_db
 def test_request_collection_defaults_to_dns_records(auth_client, domain):
     response = auth_client.post(f"/collections/domains/{domain.id}/request/", {})
     assert response.status_code == 200
