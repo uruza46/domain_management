@@ -18,8 +18,12 @@
       </tr>
     </thead>
     <tbody>
-      <tr class="ledger-row" style="cursor:pointer" data-fqdn="{{ group.root.domain.fqdn }}"
-          hx-get="{% url 'domain_panel' group.root.domain.id %}" hx-target="#drawer" hx-swap="innerHTML">
+      <tr class="ledger-row" tabindex="0" style="cursor:pointer"
+          data-role="ledger-row"
+          data-domain-id="{{ group.root.domain.id }}"
+          data-fqdn="{{ group.root.domain.fqdn }}"
+          data-parent-fqdn=""
+          data-panel-url="{% url 'domain_panel' group.root.domain.id %}">
         <td style="font-family:monospace">
           <strong>{{ group.root.domain.fqdn|leaf_label }}</strong><span class="text-muted">{{ group.root.domain.fqdn|rest_label }}</span>
           <span class="badge bg-light text-secondary border ms-1">L0</span>
@@ -29,8 +33,12 @@
         <td>{% include "domains/_ssl.html" with expiry=group.root.ssl_expiry state=group.root.ssl_state %}</td>
       </tr>
       {% for node in group.rows %}
-      <tr class="ledger-row" style="cursor:pointer" data-fqdn="{{ node.domain.fqdn }}"
-          hx-get="{% url 'domain_panel' node.domain.id %}" hx-target="#drawer" hx-swap="innerHTML">
+      <tr class="ledger-row" tabindex="0" style="cursor:pointer"
+          data-role="ledger-row"
+          data-domain-id="{{ node.domain.id }}"
+          data-fqdn="{{ node.domain.fqdn }}"
+          data-parent-fqdn="{% if node.domain.parent_domain %}{{ node.domain.parent_domain.fqdn }}{% endif %}"
+          data-panel-url="{% url 'domain_panel' node.domain.id %}">
         <td style="font-family:monospace">
           <span style="display:inline-block;width:{% indent_px node.depth %}px"></span>
           {% if node.depth > 1 %}<span class="text-muted">└</span>{% endif %}

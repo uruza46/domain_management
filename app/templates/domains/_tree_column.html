@@ -1,22 +1,24 @@
-<div class="col">
+{% load ledger_extras %}
+<div class="col" data-role="tree-column" data-depth="{{ depth|default:0 }}">
   <div class="px-3 py-2 border-bottom text-muted small">{{ title }}</div>
   {% for node in nodes %}
-  <div class="cell"
-       hx-get="{% url 'domain_panel' node.domain.id %}"
-       hx-target="#drawer"
-       hx-swap="innerHTML">
+  <button type="button"
+          class="cell"
+          data-role="tree-cell"
+          data-domain-id="{{ node.domain.id }}"
+          data-parent-id="{% if node.domain.parent_domain_id %}{{ node.domain.parent_domain_id }}{% endif %}"
+          data-depth="{{ node.depth }}"
+          data-fqdn="{{ node.domain.fqdn }}"
+          data-label="{{ node|tree_label }}"
+          data-panel-url="{% url 'domain_panel' node.domain.id %}"
+          data-children-url="{% url 'domain_tree_children' node.domain.id %}"
+          data-has-children="{% if node.children %}true{% else %}false{% endif %}"
+          title="{{ node.domain.fqdn }}">
     <span class="dot {% if node.domain.status == 'active' %}bg-success{% elif node.domain.status == 'expired' %}bg-warning{% else %}bg-secondary{% endif %}"></span>
-    <span>{{ node.domain.fqdn }}</span>
-    {% if node.children %}
-    <button class="btn btn-link btn-sm p-0 ms-auto"
-            hx-get="{% url 'domain_tree_children' node.domain.id %}"
-            hx-target="#miller"
-            hx-swap="beforeend">
-      <i class="bi bi-chevron-right"></i>
-    </button>
-    {% endif %}
-  </div>
+    <span class="cell-label">{{ node|tree_label }}</span>
+    {% if node.children %}<i class="bi bi-chevron-right chev"></i>{% endif %}
+  </button>
   {% empty %}
-  <div class="text-muted small p-3">No children</div>
+  <div class="text-muted small p-3">子ドメインなし</div>
   {% endfor %}
 </div>

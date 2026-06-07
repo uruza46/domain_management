@@ -16,3 +16,10 @@ def leaf_label(fqdn):
 @register.filter
 def rest_label(fqdn):
     return "." + fqdn.split(".", 1)[1] if "." in fqdn else ""
+
+
+@register.filter
+def tree_label(node):
+    if getattr(node, "depth", 0) == 0:
+        return node.domain.fqdn
+    return node.domain.fqdn.split(".", 1)[0]

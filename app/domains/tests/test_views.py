@@ -86,3 +86,30 @@ def test_ledger_status_filter_narrows_rows(ledger_client, ledger_data):
     body = response.content.decode()
     assert "old.example.co.jp" in body
     assert "www.example.co.jp" not in body
+
+
+@pytest.mark.django_db
+def test_ledger_tree_cells_expose_navigation_data(ledger_client, ledger_data):
+    response = ledger_client.get("/domains/ledger/?view=tree")
+
+    assert response.status_code == 200
+    body = response.content.decode()
+    assert 'class="miller"' in body
+    assert 'data-role="tree-cell"' in body
+    assert 'data-panel-url="/domains/ledger/' in body
+    assert 'data-children-url="/domains/ledger/' in body
+    assert 'data-depth="0"' in body
+
+
+@pytest.mark.django_db
+def test_tree_child_column_uses_host_label_only(ledger_client, ledger_data):
+    parent = Domain.objects.get(fqdn="example.co.jp")
+
+    response = ledger_client.get(f"/domains/ledger/{parent.id}/children/")
+
+    assert response.status_code == 200
+    body = response.content.decode()
+    assert 'data-label="www"' in body
+    assert ">www<" in body
+    assert ">www.example.co.jp<" not in body
+    assert 'data-fqdn="www.example.co.jp"' in body

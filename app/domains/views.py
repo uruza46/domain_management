@@ -166,6 +166,7 @@ def import_commit(request):
 def _load_domains():
     return list(
         Domain.objects.select_related(
+            "parent_domain",
             "management_unit",
             "management_unit__mgmt_dept",
             "management_unit__primary_owner",
@@ -236,6 +237,7 @@ def domain_panel(request, pk):
     today = timezone.localdate()
     domain = get_object_or_404(
         Domain.objects.select_related(
+            "parent_domain",
             "management_unit",
             "management_unit__mgmt_dept",
             "management_unit__primary_owner",
@@ -255,5 +257,5 @@ def domain_tree_children(request, pk):
     return render(
         request,
         "domains/_tree_column.html",
-        {"title": node.domain.fqdn if node else "", "nodes": node.children if node else []},
+        {"title": node.domain.fqdn if node else "", "nodes": node.children if node else [], "depth": node.depth + 1 if node else 0},
     )

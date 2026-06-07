@@ -14,13 +14,20 @@
   .ssl-soon{background:#fef3c7;color:#b45309}.ssl-exp{background:#fee2e2;color:#b91c1c}
   .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid #e5e7eb;border-radius:999px;padding:4px 11px;font-size:.78rem;color:#111827;text-decoration:none}
   .chip.active{background:#1e293b;color:#fff;border-color:#1e293b}
-  .ledger-row:hover{background:#f9fafb}.ledger-row.sel{background:#eef4ff}
+  .ledger-row:hover{background:#f9fafb}
+  .ledger-row.is-selected{background:#e0edff;outline:2px solid #3b82f6;outline-offset:-2px}
   .ledger-grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px}
   .drawer-card{background:#fff;border:1px solid #e5e7eb;border-radius:8px;min-height:300px}
-  .miller{display:flex;overflow-x:auto}.miller .col{min-width:220px;border-right:1px solid #eef0f3}
-  .miller .cell{display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;font-family:monospace;font-size:.82rem}
-  .miller .cell:hover{background:#f9fafb}.miller .cell .dot{width:7px;height:7px;border-radius:50%}
-  @media (max-width: 980px){.ledger-grid{grid-template-columns:1fr}.drawer-card{min-height:auto}}
+  .miller{display:flex;overflow-x:auto;min-height:640px}
+  .miller .col{min-width:260px;max-width:260px;border-right:1px solid #eef0f3}
+  .miller .cell{width:100%;border:0;background:transparent;display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;font-family:monospace;font-size:.82rem;text-align:left;color:#111827}
+  .miller .cell:hover{background:#f9fafb}
+  .miller .cell:focus{outline:2px solid #93c5fd;outline-offset:-2px}
+  .miller .cell.is-selected{background:#e0edff;outline:2px solid #3b82f6;outline-offset:-2px}
+  .miller .cell .dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+  .miller .cell-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .miller .cell .chev{margin-left:auto;color:#6b7280;flex:0 0 auto}
+  @media (max-width: 980px){.ledger-grid{grid-template-columns:1fr}.drawer-card{min-height:auto}.miller{min-height:420px}}
 </style>
 
 <div class="d-flex align-items-center justify-content-between mb-3">
@@ -51,12 +58,14 @@
   <span class="ms-auto text-muted small align-self-center">基準日 {{ today|date:'Y/m/d' }}</span>
 </div>
 
-<div class="ledger-grid">
+<div class="ledger-grid" data-view-mode="{{ view_mode }}">
   <div>
     {% if view_mode == 'tree' %}
-      <div class="drawer-card p-2"><div class="miller" id="miller">
-        {% include "domains/_tree_column.html" with title="ルートドメイン" nodes=roots %}
-      </div></div>
+      <div class="drawer-card p-2">
+        <div class="miller" id="miller">
+          {% include "domains/_tree_column.html" with title="ルートドメイン" nodes=roots depth=0 %}
+        </div>
+      </div>
     {% else %}
       <div id="list-region">{% include "domains/_list.html" %}</div>
     {% endif %}
@@ -67,11 +76,114 @@
 </div>
 
 <script>
-  document.addEventListener('click', function (e) {
-    const row = e.target.closest('.ledger-row, .miller .cell');
-    if (!row) return;
-    document.querySelectorAll('.ledger-row.sel, .miller .cell.sel').forEach(el => el.classList.remove('sel'));
-    row.classList.add('sel');
+(() => {
+  const drawer = document.getElementById('drawer');
+  const grid = document.querySelector('.ledger-grid');
+  const isTree = grid && grid.dataset.viewMode === 'tree';
+
+  function selectableItems() {
+    return Array.from(document.querySelectorAll(isTree ? '[data-role="tree-cell"]' : '[data-role="ledger-row"]'));
+  }
+
+  function updatePanel(item) {
+    if (!item || !item.dataset.panelUrl || !drawer) return Promise.resolve();
+    return fetch(item.dataset.panelUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(response => response.text())
+      .then(html => { drawer.innerHTML = html; });
+  }
+
+  function removeTreeColumnsRightOf(depth) {
+    document.querySelectorAll('[data-role="tree-column"]').forEach(column => {
+      if (Number(column.dataset.depth) > depth) column.remove();
+    });
+  }
+
+  function expandTree(item, options = {}) {
+    if (!isTree || !item || item.dataset.hasChildren !== 'true') {
+      return Promise.resolve(null);
+    }
+    const depth = Number(item.dataset.depth || 0);
+    removeTreeColumnsRightOf(depth);
+    return fetch(item.dataset.childrenUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(response => response.text())
+      .then(html => {
+        const miller = document.getElementById('miller');
+        miller.insertAdjacentHTML('beforeend', html);
+        if (options.focusFirstChild) {
+          const nextColumn = miller.querySelector(`[data-role="tree-column"][data-depth="${depth + 1}"]`);
+          const firstChild = nextColumn && nextColumn.querySelector('[data-role="tree-cell"]');
+          if (firstChild) selectItem(firstChild, { expand: false, focus: true });
+        }
+      });
+  }
+
+  function clearSelection() {
+    document.querySelectorAll('.is-selected').forEach(el => el.classList.remove('is-selected'));
+  }
+
+  function selectItem(item, options = {}) {
+    if (!item) return Promise.resolve();
+    clearSelection();
+    item.classList.add('is-selected');
+    if (options.focus !== false) item.focus({ preventScroll: true });
+    item.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    if (isTree) removeTreeColumnsRightOf(Number(item.dataset.depth || 0));
+    const panelPromise = options.panel === false ? Promise.resolve() : updatePanel(item);
+    const expandPromise = options.expand ? expandTree(item, options) : Promise.resolve();
+    return Promise.all([panelPromise, expandPromise]);
+  }
+
+  function sameColumnItems(item) {
+    if (!isTree) return selectableItems();
+    const column = item.closest('[data-role="tree-column"]');
+    return Array.from(column.querySelectorAll('[data-role="tree-cell"]'));
+  }
+
+  function selectByOffset(item, delta) {
+    const items = sameColumnItems(item);
+    const index = items.indexOf(item);
+    if (index < 0) return;
+    const next = items[Math.max(0, Math.min(items.length - 1, index + delta))];
+    selectItem(next, { expand: false });
+  }
+
+  function selectParent(item) {
+    if (isTree) {
+      const parentId = item.dataset.parentId;
+      if (!parentId) return;
+      const parent = document.querySelector(`[data-role="tree-cell"][data-domain-id="${parentId}"]`);
+      if (parent) selectItem(parent, { expand: false });
+      return;
+    }
+    const parentFqdn = item.dataset.parentFqdn;
+    if (!parentFqdn) return;
+    const parent = document.querySelector(`[data-role="ledger-row"][data-fqdn="${parentFqdn}"]`);
+    if (parent) selectItem(parent, { expand: false });
+  }
+
+  document.addEventListener('click', event => {
+    const item = event.target.closest('[data-role="ledger-row"], [data-role="tree-cell"]');
+    if (!item) return;
+    selectItem(item, { expand: isTree });
   });
+
+  document.addEventListener('keydown', event => {
+    const item = event.target.closest('[data-role="ledger-row"], [data-role="tree-cell"]');
+    if (!item) return;
+    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(event.key)) return;
+    event.preventDefault();
+    if (event.key === 'ArrowUp') selectByOffset(item, -1);
+    if (event.key === 'ArrowDown') selectByOffset(item, 1);
+    if (event.key === 'ArrowLeft') selectParent(item);
+    if (event.key === 'ArrowRight') {
+      if (isTree) selectItem(item, { expand: true, focusFirstChild: true });
+      else selectItem(item, { expand: false });
+    }
+    if (event.key === 'Enter') selectItem(item, { expand: isTree });
+  });
+
+  const initial = selectableItems()[0];
+  if (initial) selectItem(initial, { expand: false, focus: false, panel: false });
+})();
 </script>
 {% endblock %}
