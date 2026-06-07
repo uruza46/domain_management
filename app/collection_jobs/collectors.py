@@ -308,13 +308,76 @@ class SecuritySummaryCollector:
     result_type = CollectionResult.TYPE_SECURITY_SUMMARY
 
     def collect(self, domain) -> CollectionOutcome:
+        import datetime
+        from django.utils import timezone
+
+        start = time.monotonic()
+
+        mail_result = (
+            CollectionResult.objects
+            .filter(domain=domain, result_type=CollectionResult.TYPE_MAIL_AUTH,
+                    status=CollectionResult.STATUS_SUCCEEDED)
+            .order_by("-observed_at")
+            .first()
+        )
+        cert_result = (
+            CollectionResult.objects
+            .filter(domain=domain, result_type=CollectionResult.TYPE_CERTIFICATE,
+                    status=CollectionResult.STATUS_SUCCEEDED)
+            .order_by("-observed_at")
+            .first()
+        )
+
+        payload = {}
+
+        if mail_result:
+            p = mail_result.payload_json
+            payload["has_spf"] = bool(p.get("spf"))
+            payload["has_dmarc"] = bool(p.get("dmarc"))
+            payload["has_dkim"] = bool(p.get("dkim"))
+        else:
+            payload["has_spf"] = None
+            payload["has_dmarc"] = None
+            payload["has_dkim"] = None
+
+        if cert_result:
+            today = timezone.now().date()
+            latest_expiry = None
+            for cert in cert_result.payload_json.get("certificates", []):
+                not_after = cert.get("not_after")
+                if not_after:
+                    try:
+                        d = datetime.date.fromisoformat(not_after[:10])
+                        if latest_expiry is None or d > latest_expiry:
+                            latest_expiry = d
+                    except ValueError:
+                        pass
+            if latest_expiry is not None:
+                days = (latest_expiry - today).days
+                payload["cert_days_remaining"] = days
+                payload["cert_valid"] = days > 0
+            else:
+                payload["cert_days_remaining"] = None
+                payload["cert_valid"] = None
+        else:
+            payload["cert_days_remaining"] = None
+            payload["cert_valid"] = None
+
+        duration_ms = int((time.monotonic() - start) * 1000)
+        parts = (
+            (["SPF✓"] if payload.get("has_spf") else [])
+            + (["DMARC✓"] if payload.get("has_dmarc") else [])
+            + (["DKIM✓"] if payload.get("has_dkim") else [])
+            + ([f"cert {payload['cert_days_remaining']}d"] if payload.get("cert_valid") else [])
+        )
         return CollectionOutcome(
             result_type=self.result_type,
             method=CollectionResult.METHOD_DERIVED,
-            source_name="stub",
+            source_name="local_db",
             status=CollectionResult.STATUS_SUCCEEDED,
-            payload={},
-            raw_summary="[stub] security summary not yet implemented",
+            payload=payload,
+            raw_summary=", ".join(parts) if parts else "no security data available",
+            duration_ms=duration_ms,
         )
 
 

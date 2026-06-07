@@ -6,6 +6,7 @@ import dns.resolver
 import pytest
 from unittest.mock import MagicMock, patch
 
+from collection_jobs.models import CollectionJob
 from collection_jobs.collectors import (
     CertificateCollector,
     DnsRecordCollector,
@@ -196,13 +197,6 @@ def test_mail_auth_collector_returns_stub_outcome(domain):
     assert outcome.status == CollectionResult.STATUS_SUCCEEDED
 
 
-@pytest.mark.django_db
-def test_certificate_collector_returns_stub_outcome(domain):
-    outcome = CertificateCollector().collect(domain)
-    assert outcome.result_type == CollectionResult.TYPE_CERTIFICATE
-    assert outcome.status == CollectionResult.STATUS_SUCCEEDED
-
-
 # ---------------------------------------------------------------------------
 # CertificateCollector — Task 5
 # ---------------------------------------------------------------------------
@@ -298,6 +292,104 @@ def test_security_summary_collector_returns_stub_outcome(domain):
     outcome = SecuritySummaryCollector().collect(domain)
     assert outcome.result_type == CollectionResult.TYPE_SECURITY_SUMMARY
     assert outcome.status == CollectionResult.STATUS_SUCCEEDED
+
+
+# ---------------------------------------------------------------------------
+# SecuritySummaryCollector — Task 6
+# ---------------------------------------------------------------------------
+
+import datetime as _dt
+from django.utils import timezone as _tz
+
+
+def _make_collection_result(domain, result_type, payload):
+    job = CollectionJob.objects.create(
+        domain=domain,
+        trigger_type=CollectionJob.TRIGGER_SCHEDULED,
+        requested_types=[result_type],
+        dedup_key=f"test:{result_type}:{domain.id}",
+    )
+    return CollectionResult.objects.create(
+        job=job,
+        domain=domain,
+        result_type=result_type,
+        method="dns_query",
+        source_name="stub",
+        status=CollectionResult.STATUS_SUCCEEDED,
+        observed_at=_tz.now(),
+        payload_json=payload,
+    )
+
+
+@pytest.mark.django_db
+def test_security_summary_derives_spf_and_dmarc_present(domain):
+    _make_collection_result(domain, CollectionResult.TYPE_MAIL_AUTH, {
+        "spf": "v=spf1 ~all",
+        "dmarc": "v=DMARC1; p=reject",
+        "dkim": [{"selector": "google", "record": "v=DKIM1; k=rsa; p=ABC"}],
+    })
+
+    outcome = SecuritySummaryCollector().collect(domain)
+
+    assert outcome.status == CollectionResult.STATUS_SUCCEEDED
+    assert outcome.result_type == CollectionResult.TYPE_SECURITY_SUMMARY
+    assert outcome.method == CollectionResult.METHOD_DERIVED
+    assert outcome.payload["has_spf"] is True
+    assert outcome.payload["has_dmarc"] is True
+    assert outcome.payload["has_dkim"] is True
+
+
+@pytest.mark.django_db
+def test_security_summary_derives_spf_absent(domain):
+    _make_collection_result(domain, CollectionResult.TYPE_MAIL_AUTH, {
+        "spf": None,
+        "dmarc": None,
+        "dkim": [],
+    })
+
+    outcome = SecuritySummaryCollector().collect(domain)
+
+    assert outcome.payload["has_spf"] is False
+    assert outcome.payload["has_dmarc"] is False
+    assert outcome.payload["has_dkim"] is False
+
+
+@pytest.mark.django_db
+def test_security_summary_derives_cert_days_remaining(domain):
+    future = (_dt.date.today() + _dt.timedelta(days=45)).isoformat()
+    _make_collection_result(domain, CollectionResult.TYPE_CERTIFICATE, {
+        "certificates": [{"common_name": "example.co.jp", "not_after": future}],
+    })
+
+    outcome = SecuritySummaryCollector().collect(domain)
+
+    assert outcome.payload["cert_valid"] is True
+    assert outcome.payload["cert_days_remaining"] == 45
+
+
+@pytest.mark.django_db
+def test_security_summary_derives_expired_cert(domain):
+    past = (_dt.date.today() - _dt.timedelta(days=10)).isoformat()
+    _make_collection_result(domain, CollectionResult.TYPE_CERTIFICATE, {
+        "certificates": [{"common_name": "example.co.jp", "not_after": past}],
+    })
+
+    outcome = SecuritySummaryCollector().collect(domain)
+
+    assert outcome.payload["cert_valid"] is False
+    assert outcome.payload["cert_days_remaining"] == -10
+
+
+@pytest.mark.django_db
+def test_security_summary_succeeds_with_no_prior_results(domain):
+    outcome = SecuritySummaryCollector().collect(domain)
+
+    assert outcome.status == CollectionResult.STATUS_SUCCEEDED
+    assert outcome.payload["has_spf"] is None
+    assert outcome.payload["has_dmarc"] is None
+    assert outcome.payload["has_dkim"] is None
+    assert outcome.payload["cert_valid"] is None
+    assert outcome.payload["cert_days_remaining"] is None
 
 
 # ---------------------------------------------------------------------------
