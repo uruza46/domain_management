@@ -156,16 +156,68 @@ class HttpStatusCollector:
 
 class MailAuthCollector:
     result_type = CollectionResult.TYPE_MAIL_AUTH
+    DKIM_SELECTORS = ["google", "default", "selector1", "selector2", "mail"]
 
     def collect(self, domain) -> CollectionOutcome:
+        resolver = dns.resolver.Resolver()
+        resolver.nameservers = [DNS_NAMESERVER]
+        start = time.monotonic()
+
+        spf = self._find_spf(resolver, domain.fqdn)
+        dmarc = self._find_dmarc(resolver, domain.fqdn)
+        dkim = self._find_dkim(resolver, domain.fqdn)
+
+        duration_ms = int((time.monotonic() - start) * 1000)
+        parts = (
+            (["SPF"] if spf else [])
+            + (["DMARC"] if dmarc else [])
+            + ([f"DKIM({len(dkim)})"] if dkim else [])
+        )
         return CollectionOutcome(
             result_type=self.result_type,
             method=CollectionResult.METHOD_DNS_QUERY,
-            source_name="stub",
+            source_name=DNS_NAMESERVER,
             status=CollectionResult.STATUS_SUCCEEDED,
-            payload={},
-            raw_summary="[stub] mail auth not yet implemented",
+            payload={"spf": spf, "dmarc": dmarc, "dkim": dkim},
+            raw_summary=", ".join(parts) if parts else "no mail auth records found",
+            duration_ms=duration_ms,
         )
+
+    def _find_spf(self, resolver, fqdn):
+        try:
+            for rdata in resolver.resolve(fqdn, "TXT"):
+                txt = str(rdata).strip('"')
+                if txt.startswith("v=spf1"):
+                    return txt
+        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer,
+                dns.resolver.NoNameservers, dns.exception.Timeout):
+            pass
+        return None
+
+    def _find_dmarc(self, resolver, fqdn):
+        try:
+            for rdata in resolver.resolve(f"_dmarc.{fqdn}", "TXT"):
+                txt = str(rdata).strip('"')
+                if txt.startswith("v=DMARC1"):
+                    return txt
+        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer,
+                dns.resolver.NoNameservers, dns.exception.Timeout):
+            pass
+        return None
+
+    def _find_dkim(self, resolver, fqdn):
+        results = []
+        for selector in self.DKIM_SELECTORS:
+            try:
+                for rdata in resolver.resolve(f"{selector}._domainkey.{fqdn}", "TXT"):
+                    txt = str(rdata).strip('"')
+                    if "v=DKIM1" in txt:
+                        results.append({"selector": selector, "record": txt})
+                        break
+            except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer,
+                    dns.resolver.NoNameservers, dns.exception.Timeout):
+                pass
+        return results
 
 
 class CertificateCollector:

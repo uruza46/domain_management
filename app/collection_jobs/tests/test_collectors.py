@@ -215,3 +215,66 @@ def test_security_summary_collector_returns_stub_outcome(domain):
     outcome = SecuritySummaryCollector().collect(domain)
     assert outcome.result_type == CollectionResult.TYPE_SECURITY_SUMMARY
     assert outcome.status == CollectionResult.STATUS_SUCCEEDED
+
+
+# ---------------------------------------------------------------------------
+# MailAuthCollector — Task 4
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_mail_auth_collector_finds_spf_record(domain):
+    def fake_resolve(fqdn, rtype, **kwargs):
+        if rtype == "TXT" and not fqdn.startswith("_"):
+            return FakeAnswer(['"v=spf1 include:_spf.example.co.jp ~all"'])
+        raise dns.resolver.NoAnswer
+
+    with patch("collection_jobs.collectors.dns.resolver.Resolver") as MockR:
+        MockR.return_value.resolve.side_effect = fake_resolve
+        outcome = MailAuthCollector().collect(domain)
+
+    assert outcome.status == CollectionResult.STATUS_SUCCEEDED
+    assert outcome.result_type == CollectionResult.TYPE_MAIL_AUTH
+    assert outcome.payload["spf"] is not None
+    assert "spf1" in outcome.payload["spf"]
+
+
+@pytest.mark.django_db
+def test_mail_auth_collector_finds_dmarc_record(domain):
+    def fake_resolve(fqdn, rtype, **kwargs):
+        if fqdn.startswith("_dmarc.") and rtype == "TXT":
+            return FakeAnswer(['"v=DMARC1; p=reject; rua=mailto:dmarc@example.co.jp"'])
+        raise dns.resolver.NoAnswer
+
+    with patch("collection_jobs.collectors.dns.resolver.Resolver") as MockR:
+        MockR.return_value.resolve.side_effect = fake_resolve
+        outcome = MailAuthCollector().collect(domain)
+
+    assert outcome.payload["dmarc"] is not None
+    assert "DMARC1" in outcome.payload["dmarc"]
+
+
+@pytest.mark.django_db
+def test_mail_auth_collector_finds_dkim_record(domain):
+    def fake_resolve(fqdn, rtype, **kwargs):
+        if "._domainkey." in fqdn and rtype == "TXT":
+            return FakeAnswer(['"v=DKIM1; k=rsa; p=MIGfMA..."'])
+        raise dns.resolver.NoAnswer
+
+    with patch("collection_jobs.collectors.dns.resolver.Resolver") as MockR:
+        MockR.return_value.resolve.side_effect = fake_resolve
+        outcome = MailAuthCollector().collect(domain)
+
+    assert len(outcome.payload["dkim"]) >= 1
+    assert outcome.payload["dkim"][0]["record"].startswith("v=DKIM1")
+
+
+@pytest.mark.django_db
+def test_mail_auth_collector_succeeds_with_no_records(domain):
+    with patch("collection_jobs.collectors.dns.resolver.Resolver") as MockR:
+        MockR.return_value.resolve.side_effect = dns.resolver.NoAnswer
+        outcome = MailAuthCollector().collect(domain)
+
+    assert outcome.status == CollectionResult.STATUS_SUCCEEDED
+    assert outcome.payload["spf"] is None
+    assert outcome.payload["dmarc"] is None
+    assert outcome.payload["dkim"] == []
