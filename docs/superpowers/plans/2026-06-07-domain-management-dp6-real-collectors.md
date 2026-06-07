@@ -61,7 +61,7 @@
 
 ## Task 4: MailAuthCollector (Real)
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
   Tests in `app/collection_jobs/tests/test_collectors.py`:
   - `test_mail_auth_collector_finds_spf_record` — mock TXT returns `v=spf1 ...`
@@ -73,7 +73,7 @@
 
   Expected: FAIL (stub returns no payload fields).
 
-- [ ] **Step 2: Implement `MailAuthCollector`**
+- [x] **Step 2: Implement `MailAuthCollector`**
 
   ```python
   DKIM_SELECTORS = ["google", "default", "selector1", "selector2", "mail"]
@@ -90,17 +90,17 @@
 
   Strip surrounding quotes from TXT values (`str(rdata).strip('"')`).
 
-- [ ] **Step 3: Run tests** — mail_auth tests pass
+- [x] **Step 3: Run tests** — mail_auth tests pass
 
   Run: `docker compose exec -T web pytest collection_jobs/tests/test_collectors.py -k mail_auth -v`
 
   Expected: PASS.
 
-- [ ] **Step 4: Run full suite** — no regressions
+- [x] **Step 4: Run full suite** — no regressions
 
   Run: `docker compose exec -T web pytest -q`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```bash
   git add app/collection_jobs/collectors.py app/collection_jobs/tests/test_collectors.py
@@ -111,7 +111,7 @@
 
 ## Task 5: CertificateCollector (Real)
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
   Tests in `app/collection_jobs/tests/test_collectors.py`:
   - `test_certificate_collector_returns_cert_list` — mock `urlopen` returns JSON cert array
@@ -123,7 +123,7 @@
 
   Expected: FAIL (stub returns no payload fields).
 
-- [ ] **Step 2: Implement `CertificateCollector`**
+- [x] **Step 2: Implement `CertificateCollector`**
 
   ```python
   MAX_CERTS = 20
@@ -136,15 +136,15 @@
 
   Error handling: `socket.timeout` → `error_code=timeout`; `URLError` → `error_code=connection_error`.
 
-- [ ] **Step 3: Run tests** — certificate tests pass
+- [x] **Step 3: Run tests** — certificate tests pass
 
   Run: `docker compose exec -T web pytest collection_jobs/tests/test_collectors.py -k certificate -v`
 
   Expected: PASS.
 
-- [ ] **Step 4: Run full suite** — no regressions
+- [x] **Step 4: Run full suite** — no regressions
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```bash
   git add app/collection_jobs/collectors.py app/collection_jobs/tests/test_collectors.py
@@ -155,7 +155,7 @@
 
 ## Task 6: SecuritySummaryCollector (Derived)
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
   Tests in `app/collection_jobs/tests/test_collectors.py`:
   - `test_security_summary_derives_spf_and_dmarc_present` — create `mail_auth` CollectionResult in DB with SPF/DMARC payload
@@ -166,7 +166,7 @@
 
   Expected: FAIL (stub returns empty payload).
 
-- [ ] **Step 2: Implement `SecuritySummaryCollector`**
+- [x] **Step 2: Implement `SecuritySummaryCollector`**
 
   ```python
   # No network. Read latest succeeded CollectionResult per type from DB.
@@ -184,15 +184,15 @@
 
   Payload: `{"has_spf", "has_dmarc", "has_dkim", "cert_valid", "cert_days_remaining"}`
 
-- [ ] **Step 3: Run tests** — security_summary tests pass
+- [x] **Step 3: Run tests** — security_summary tests pass
 
   Run: `docker compose exec -T web pytest collection_jobs/tests/test_collectors.py -k security_summary -v`
 
   Expected: PASS.
 
-- [ ] **Step 4: Run full suite** — no regressions
+- [x] **Step 4: Run full suite** — no regressions
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```bash
   git add app/collection_jobs/collectors.py app/collection_jobs/tests/test_collectors.py
@@ -203,25 +203,25 @@
 
 ## Task 7: Final Verification
 
-- [ ] **Step 1: Run all collection_jobs tests**
+- [x] **Step 1: Run all collection_jobs tests**
 
   Run: `docker compose exec -T web pytest collection_jobs/tests -v`
 
   Expected: all PASS.
 
-- [ ] **Step 2: Run full test suite**
+- [x] **Step 2: Run full test suite**
 
   Run: `docker compose exec -T web pytest -q`
 
   Expected: all PASS.
 
-- [ ] **Step 3: Django system check**
+- [x] **Step 3: Django system check**
 
   Run: `docker compose exec -T web python manage.py check`
 
   Expected: `System check identified no issues`.
 
-- [ ] **Step 4: Smoke test**
+- [x] **Step 4: Smoke test**
 
   ```bash
   docker compose exec -T web python manage.py request_collection example.co.jp \
@@ -232,7 +232,7 @@
 
   Expected: job runs, CollectionResult rows created for each type, BatchRun can be triggered via `run_batch_collection`.
 
-- [ ] **Step 5: Push and merge**
+- [x] **Step 5: Push and merge**
 
   ```bash
   git push origin dp6-real-collectors
