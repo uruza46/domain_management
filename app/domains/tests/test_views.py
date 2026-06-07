@@ -1,6 +1,9 @@
 import pytest
 from django.contrib.auth import get_user_model
+from django.urls import reverse
 
+from collection_jobs.models import CollectionJob, CollectionResult
+from collection_jobs.services import queue_collection_job
 from domains.models import Domain
 from owners.models import ManagementUnit
 
@@ -113,3 +116,16 @@ def test_tree_child_column_uses_host_label_only(ledger_client, ledger_data):
     assert ">www<" in body
     assert ">www.example.co.jp<" not in body
     assert 'data-fqdn="www.example.co.jp"' in body
+
+
+@pytest.mark.django_db
+def test_domain_panel_links_to_collection_history_and_request(ledger_client, ledger_data):
+    domain = Domain.objects.get(fqdn="example.co.jp")
+
+    response = ledger_client.get(f"/domains/ledger/{domain.id}/panel/")
+
+    assert response.status_code == 200
+    body = response.content.decode()
+    assert "情報収集" in body
+    assert f"/collections/domains/{domain.id}/history/" in body
+    assert f"/collections/domains/{domain.id}/request/" in body
