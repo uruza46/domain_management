@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import MagicMock, patch
 from django.core.management import call_command
 
 from collection_jobs.models import CollectionJob, CollectionResult
@@ -6,6 +7,18 @@ from collection_jobs.services import queue_collection_job
 from dns_info.models import DnsRecord
 from domains.models import Domain
 from owners.models import ManagementUnit
+
+
+class _FakeRdata:
+    def __init__(self, v): self._v = v
+    def __str__(self): return self._v
+
+
+class _FakeAnswer:
+    def __init__(self, values, ttl=300):
+        self.ttl = ttl
+        self._items = [_FakeRdata(v) for v in values]
+    def __iter__(self): return iter(self._items)
 
 
 @pytest.fixture
@@ -26,6 +39,13 @@ def domain(db):
 
 @pytest.mark.django_db
 def test_run_collection_jobs_processes_queued_dns_job(domain):
+    import dns.resolver
+
+    def fake_resolve(fqdn, rtype, **kwargs):
+        if rtype == "A":
+            return _FakeAnswer(["203.0.113.10"])
+        raise dns.resolver.NoAnswer
+
     job = queue_collection_job(
         domain,
         [CollectionResult.TYPE_DNS_RECORDS],
@@ -33,7 +53,9 @@ def test_run_collection_jobs_processes_queued_dns_job(domain):
     )
     assert job.status == CollectionJob.STATUS_QUEUED
 
-    call_command("run_collection_jobs", max_jobs=1)
+    with patch("collection_jobs.collectors.dns.resolver.Resolver") as MockResolver:
+        MockResolver.return_value.resolve.side_effect = fake_resolve
+        call_command("run_collection_jobs", max_jobs=1)
 
     job.refresh_from_db()
     assert job.status == CollectionJob.STATUS_SUCCEEDED

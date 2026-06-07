@@ -1,6 +1,17 @@
+import socket
+import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 
+import dns.exception
+import dns.resolver
+
 from .models import CollectionResult
+
+DNS_RECORD_TYPES = ["A", "AAAA", "CNAME", "MX", "NS", "TXT"]
+DNS_NAMESERVER = "8.8.8.8"
+HTTP_TIMEOUT = 10  # seconds
 
 
 @dataclass
@@ -16,22 +27,369 @@ class CollectionOutcome:
     duration_ms: int = 0
 
 
-class StubDnsRecordCollector:
+# ---------------------------------------------------------------------------
+# Real collectors
+# ---------------------------------------------------------------------------
+
+class DnsRecordCollector:
     result_type = CollectionResult.TYPE_DNS_RECORDS
 
     def collect(self, domain) -> CollectionOutcome:
-        records = [{"type": "A", "name": domain.fqdn, "value": "203.0.113.10", "ttl": 300}]
+        resolver = dns.resolver.Resolver()
+        resolver.nameservers = [DNS_NAMESERVER]
+        records = []
+        start = time.monotonic()
+
+        for rtype in DNS_RECORD_TYPES:
+            try:
+                answers = resolver.resolve(domain.fqdn, rtype)
+                for rdata in answers:
+                    records.append({
+                        "type": rtype,
+                        "name": domain.fqdn,
+                        "value": str(rdata),
+                        "ttl": answers.ttl,
+                    })
+            except dns.resolver.NXDOMAIN:
+                duration_ms = int((time.monotonic() - start) * 1000)
+                return CollectionOutcome(
+                    result_type=self.result_type,
+                    method=CollectionResult.METHOD_DNS_QUERY,
+                    source_name=DNS_NAMESERVER,
+                    status=CollectionResult.STATUS_FAILED,
+                    error_code="nxdomain",
+                    error_message=f"{domain.fqdn} does not exist",
+                    duration_ms=duration_ms,
+                )
+            except dns.exception.Timeout:
+                duration_ms = int((time.monotonic() - start) * 1000)
+                return CollectionOutcome(
+                    result_type=self.result_type,
+                    method=CollectionResult.METHOD_DNS_QUERY,
+                    source_name=DNS_NAMESERVER,
+                    status=CollectionResult.STATUS_FAILED,
+                    error_code="timeout",
+                    error_message="DNS query timed out",
+                    duration_ms=duration_ms,
+                )
+            except (dns.resolver.NoAnswer, dns.resolver.NoNameservers):
+                pass
+
+        duration_ms = int((time.monotonic() - start) * 1000)
         return CollectionOutcome(
             result_type=self.result_type,
             method=CollectionResult.METHOD_DNS_QUERY,
-            source_name="stub",
+            source_name=DNS_NAMESERVER,
             status=CollectionResult.STATUS_SUCCEEDED,
             payload={"records": records},
-            raw_summary=f"{len(records)} A record(s) [stub]",
-            duration_ms=0,
+            raw_summary=f"{len(records)} record(s)",
+            duration_ms=duration_ms,
         )
 
 
+class HttpStatusCollector:
+    result_type = CollectionResult.TYPE_HTTP_STATUS
+
+    def collect(self, domain) -> CollectionOutcome:
+        url = f"https://{domain.fqdn}"
+        start = time.monotonic()
+        redirects = []
+
+        class _RedirectRecorder(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                redirects.append(req.full_url)
+                return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+        opener = urllib.request.build_opener(_RedirectRecorder)
+        req = urllib.request.Request(url, method="HEAD")
+        req.add_header("User-Agent", "DomainManagement/1.0")
+
+        try:
+            with opener.open(req, timeout=HTTP_TIMEOUT) as response:
+                duration_ms = int((time.monotonic() - start) * 1000)
+                return CollectionOutcome(
+                    result_type=self.result_type,
+                    method=CollectionResult.METHOD_HTTP_HEAD,
+                    source_name=url,
+                    status=CollectionResult.STATUS_SUCCEEDED,
+                    payload={
+                        "status_code": response.status,
+                        "final_url": response.url,
+                        "redirects": redirects,
+                        "duration_ms": duration_ms,
+                    },
+                    raw_summary=f"HTTP {response.status}",
+                    duration_ms=duration_ms,
+                )
+        except socket.timeout:
+            duration_ms = int((time.monotonic() - start) * 1000)
+            return CollectionOutcome(
+                result_type=self.result_type,
+                method=CollectionResult.METHOD_HTTP_HEAD,
+                source_name=url,
+                status=CollectionResult.STATUS_FAILED,
+                error_code="timeout",
+                error_message="HTTP request timed out",
+                duration_ms=duration_ms,
+            )
+        except urllib.error.URLError as exc:
+            duration_ms = int((time.monotonic() - start) * 1000)
+            reason = getattr(exc, "reason", None)
+            if isinstance(reason, (socket.timeout, TimeoutError)):
+                error_code, error_message = "timeout", "HTTP request timed out"
+            else:
+                error_code, error_message = "connection_error", str(exc)[:200]
+            return CollectionOutcome(
+                result_type=self.result_type,
+                method=CollectionResult.METHOD_HTTP_HEAD,
+                source_name=url,
+                status=CollectionResult.STATUS_FAILED,
+                error_code=error_code,
+                error_message=error_message,
+                duration_ms=duration_ms,
+            )
+
+
+# ---------------------------------------------------------------------------
+# Stub collectors (real implementation deferred)
+# ---------------------------------------------------------------------------
+
+class MailAuthCollector:
+    result_type = CollectionResult.TYPE_MAIL_AUTH
+    DKIM_SELECTORS = ["google", "default", "selector1", "selector2", "mail"]
+
+    def collect(self, domain) -> CollectionOutcome:
+        resolver = dns.resolver.Resolver()
+        resolver.nameservers = [DNS_NAMESERVER]
+        start = time.monotonic()
+
+        spf = self._find_spf(resolver, domain.fqdn)
+        dmarc = self._find_dmarc(resolver, domain.fqdn)
+        dkim = self._find_dkim(resolver, domain.fqdn)
+
+        duration_ms = int((time.monotonic() - start) * 1000)
+        parts = (
+            (["SPF"] if spf else [])
+            + (["DMARC"] if dmarc else [])
+            + ([f"DKIM({len(dkim)})"] if dkim else [])
+        )
+        return CollectionOutcome(
+            result_type=self.result_type,
+            method=CollectionResult.METHOD_DNS_QUERY,
+            source_name=DNS_NAMESERVER,
+            status=CollectionResult.STATUS_SUCCEEDED,
+            payload={"spf": spf, "dmarc": dmarc, "dkim": dkim},
+            raw_summary=", ".join(parts) if parts else "no mail auth records found",
+            duration_ms=duration_ms,
+        )
+
+    def _find_spf(self, resolver, fqdn):
+        try:
+            for rdata in resolver.resolve(fqdn, "TXT"):
+                txt = str(rdata).strip('"')
+                if txt.startswith("v=spf1"):
+                    return txt
+        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer,
+                dns.resolver.NoNameservers, dns.exception.Timeout):
+            pass
+        return None
+
+    def _find_dmarc(self, resolver, fqdn):
+        try:
+            for rdata in resolver.resolve(f"_dmarc.{fqdn}", "TXT"):
+                txt = str(rdata).strip('"')
+                if txt.startswith("v=DMARC1"):
+                    return txt
+        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer,
+                dns.resolver.NoNameservers, dns.exception.Timeout):
+            pass
+        return None
+
+    def _find_dkim(self, resolver, fqdn):
+        results = []
+        for selector in self.DKIM_SELECTORS:
+            try:
+                for rdata in resolver.resolve(f"{selector}._domainkey.{fqdn}", "TXT"):
+                    txt = str(rdata).strip('"')
+                    if "v=DKIM1" in txt:
+                        results.append({"selector": selector, "record": txt})
+                        break
+            except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer,
+                    dns.resolver.NoNameservers, dns.exception.Timeout):
+                pass
+        return results
+
+
+class CertificateCollector:
+    result_type = CollectionResult.TYPE_CERTIFICATE
+    MAX_CERTS = 20
+
+    def collect(self, domain) -> CollectionOutcome:
+        import json
+        url = f"https://crt.sh/?q=%.{domain.fqdn}&output=json"
+        start = time.monotonic()
+        req = urllib.request.Request(url)
+        req.add_header("User-Agent", "DomainManagement/1.0")
+
+        try:
+            with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as response:
+                data = json.loads(response.read().decode())
+            duration_ms = int((time.monotonic() - start) * 1000)
+
+            certs = []
+            seen = set()
+            for entry in data:
+                key = (entry.get("common_name"), entry.get("not_before"), entry.get("not_after"))
+                if key in seen:
+                    continue
+                seen.add(key)
+                certs.append({
+                    "common_name": entry.get("common_name"),
+                    "issuer": entry.get("issuer_name", ""),
+                    "not_before": entry.get("not_before"),
+                    "not_after": entry.get("not_after"),
+                })
+                if len(certs) >= self.MAX_CERTS:
+                    break
+
+            return CollectionOutcome(
+                result_type=self.result_type,
+                method=CollectionResult.METHOD_CT_LOG,
+                source_name="crt.sh",
+                status=CollectionResult.STATUS_SUCCEEDED,
+                payload={"certificates": certs},
+                raw_summary=f"{len(certs)} certificate(s)",
+                duration_ms=duration_ms,
+            )
+        except socket.timeout:
+            duration_ms = int((time.monotonic() - start) * 1000)
+            return CollectionOutcome(
+                result_type=self.result_type,
+                method=CollectionResult.METHOD_CT_LOG,
+                source_name="crt.sh",
+                status=CollectionResult.STATUS_FAILED,
+                error_code="timeout",
+                error_message="crt.sh request timed out",
+                duration_ms=duration_ms,
+            )
+        except urllib.error.URLError as exc:
+            duration_ms = int((time.monotonic() - start) * 1000)
+            reason = getattr(exc, "reason", None)
+            if isinstance(reason, (socket.timeout, TimeoutError)):
+                error_code, error_message = "timeout", "crt.sh request timed out"
+            else:
+                error_code, error_message = "connection_error", str(exc)[:200]
+            return CollectionOutcome(
+                result_type=self.result_type,
+                method=CollectionResult.METHOD_CT_LOG,
+                source_name="crt.sh",
+                status=CollectionResult.STATUS_FAILED,
+                error_code=error_code,
+                error_message=error_message,
+                duration_ms=duration_ms,
+            )
+
+
+class RegistrationCollector:
+    result_type = CollectionResult.TYPE_REGISTRATION
+
+    def collect(self, domain) -> CollectionOutcome:
+        return CollectionOutcome(
+            result_type=self.result_type,
+            method=CollectionResult.METHOD_RDAP,
+            source_name="stub",
+            status=CollectionResult.STATUS_SUCCEEDED,
+            payload={},
+            raw_summary="[stub] registration collection not yet implemented",
+        )
+
+
+class SecuritySummaryCollector:
+    result_type = CollectionResult.TYPE_SECURITY_SUMMARY
+
+    def collect(self, domain) -> CollectionOutcome:
+        import datetime
+        from django.utils import timezone
+
+        start = time.monotonic()
+
+        mail_result = (
+            CollectionResult.objects
+            .filter(domain=domain, result_type=CollectionResult.TYPE_MAIL_AUTH,
+                    status=CollectionResult.STATUS_SUCCEEDED)
+            .order_by("-observed_at")
+            .first()
+        )
+        cert_result = (
+            CollectionResult.objects
+            .filter(domain=domain, result_type=CollectionResult.TYPE_CERTIFICATE,
+                    status=CollectionResult.STATUS_SUCCEEDED)
+            .order_by("-observed_at")
+            .first()
+        )
+
+        payload = {}
+
+        if mail_result:
+            p = mail_result.payload_json
+            payload["has_spf"] = bool(p.get("spf"))
+            payload["has_dmarc"] = bool(p.get("dmarc"))
+            payload["has_dkim"] = bool(p.get("dkim"))
+        else:
+            payload["has_spf"] = None
+            payload["has_dmarc"] = None
+            payload["has_dkim"] = None
+
+        if cert_result:
+            today = timezone.now().date()
+            latest_expiry = None
+            for cert in cert_result.payload_json.get("certificates", []):
+                not_after = cert.get("not_after")
+                if not_after:
+                    try:
+                        d = datetime.date.fromisoformat(not_after[:10])
+                        if latest_expiry is None or d > latest_expiry:
+                            latest_expiry = d
+                    except ValueError:
+                        pass
+            if latest_expiry is not None:
+                days = (latest_expiry - today).days
+                payload["cert_days_remaining"] = days
+                payload["cert_valid"] = days > 0
+            else:
+                payload["cert_days_remaining"] = None
+                payload["cert_valid"] = None
+        else:
+            payload["cert_days_remaining"] = None
+            payload["cert_valid"] = None
+
+        duration_ms = int((time.monotonic() - start) * 1000)
+        parts = (
+            (["SPF✓"] if payload.get("has_spf") else [])
+            + (["DMARC✓"] if payload.get("has_dmarc") else [])
+            + (["DKIM✓"] if payload.get("has_dkim") else [])
+            + ([f"cert {payload['cert_days_remaining']}d"] if payload.get("cert_valid") else [])
+        )
+        return CollectionOutcome(
+            result_type=self.result_type,
+            method=CollectionResult.METHOD_DERIVED,
+            source_name="local_db",
+            status=CollectionResult.STATUS_SUCCEEDED,
+            payload=payload,
+            raw_summary=", ".join(parts) if parts else "no security data available",
+            duration_ms=duration_ms,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Registry
+# ---------------------------------------------------------------------------
+
 COLLECTORS = {
-    CollectionResult.TYPE_DNS_RECORDS: StubDnsRecordCollector(),
+    CollectionResult.TYPE_DNS_RECORDS: DnsRecordCollector(),
+    CollectionResult.TYPE_HTTP_STATUS: HttpStatusCollector(),
+    CollectionResult.TYPE_MAIL_AUTH: MailAuthCollector(),
+    CollectionResult.TYPE_CERTIFICATE: CertificateCollector(),
+    CollectionResult.TYPE_REGISTRATION: RegistrationCollector(),
+    CollectionResult.TYPE_SECURITY_SUMMARY: SecuritySummaryCollector(),
 }
