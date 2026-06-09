@@ -129,3 +129,17 @@ def parse_csv_file(content: str) -> list[ImportResult]:
         results.append(ImportResult(fqdn=fqdn, action="create", extra=extra))
 
     return results
+
+
+def parse_text_input(content: str) -> list[ImportResult]:
+    """Parse newline-separated FQDNs. Blank lines and # comments are silently skipped."""
+    results: list[ImportResult] = []
+    for line in content.splitlines():
+        line = line.strip().lower()
+        if not line or line.startswith("#"):
+            continue
+        if not _is_valid_fqdn(line):
+            results.append(ImportResult(fqdn=line, action="error", error_message="無効な FQDN"))
+            continue
+        results.append(ImportResult(fqdn=line, action="create"))
+    return results

@@ -5,7 +5,7 @@
 <div class="mb-4 d-flex align-items-center justify-content-between">
   <div>
     <h1 class="page-title">ファイル取り込み</h1>
-    <div class="text-muted small">DNS ゾーンファイルまたはドメインリスト CSV を取り込みます</div>
+    <div class="text-muted small">DNS ゾーンファイル、ドメインリスト CSV、またはテキスト直接入力でドメインを取り込みます</div>
   </div>
   <a href="{% url 'namespace_list' %}" class="btn btn-outline-secondary btn-sm">
     <i class="bi bi-diagram-3 me-1"></i>名前空間管理
@@ -20,13 +20,14 @@
     {% csrf_token %}
 
     <div class="mb-3">
-      <label class="form-label small fw-bold">ファイル種別</label>
+      <label class="form-label small fw-bold">入力方式</label>
       <select name="file_type"
               class="form-select"
               id="file-type-select"
-              onchange="document.getElementById('zone-origin').style.display=this.value==='zone'?'block':'none'">
+              onchange="updateImportFormState(this)">
         <option value="csv">ドメインリスト CSV</option>
         <option value="zone">DNS ゾーンファイル（BIND 形式）</option>
+        <option value="text">テキスト直接入力（FQDN 改行区切り）</option>
       </select>
     </div>
 
@@ -36,9 +37,16 @@
       <div class="form-text">ゾーンファイルの $ORIGIN と同じドメインを入力してください</div>
     </div>
 
-    <div class="mb-3">
+    <div class="mb-3" id="file-input-area">
       <label class="form-label small fw-bold">ファイル</label>
       <input type="file" name="file" class="form-control" accept=".txt,.csv,.zone">
+    </div>
+
+    <div class="mb-3" id="text-input-area" style="display:none">
+      <label class="form-label small fw-bold">FQDN リスト</label>
+      <textarea name="text_input" class="form-control font-monospace" rows="10"
+        placeholder="example.co.jp&#10;sub.example.co.jp&#10;# コメント行は無視されます"></textarea>
+      <div class="form-text">1 行に 1 FQDN。空行・# から始まる行はスキップされます。</div>
     </div>
 
     <button type="submit" class="btn btn-secondary">
@@ -48,4 +56,19 @@
 </div>
 
 <div id="preview-section" class="mt-4"></div>
+
+<script>
+function updateImportFormState(sel) {
+  var val = sel.value;
+  var form = document.getElementById('import-form');
+  document.getElementById('zone-origin').style.display    = val === 'zone' ? 'block' : 'none';
+  document.getElementById('file-input-area').style.display = val !== 'text' ? 'block' : 'none';
+  document.getElementById('text-input-area').style.display = val === 'text' ? 'block' : 'none';
+  if (val === 'text') {
+    form.removeAttribute('hx-encoding');
+  } else {
+    form.setAttribute('hx-encoding', 'multipart/form-data');
+  }
+}
+</script>
 {% endblock %}

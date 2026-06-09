@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .importers import ImportResult, parse_csv_file, parse_zone_file
+from .importers import ImportResult, parse_csv_file, parse_text_input, parse_zone_file
 from .models import Domain
 from .services import (
     STATUS_DISPLAY,
@@ -56,30 +56,38 @@ def import_form(request):
 @require_POST
 def import_preview(request):
     file_type = request.POST.get("file_type", "")
-    uploaded = request.FILES.get("file")
 
-    if file_type not in ("zone", "csv"):
+    if file_type not in ("zone", "csv", "text"):
         results = [ImportResult(fqdn="", action="error", error_message="ファイル種別が不正です")]
         return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type, "create_count": 0, "skip_count": 0, "error_count": 1})
 
-    if not uploaded:
-        results = [ImportResult(fqdn="", action="error", error_message="ファイルが選択されていません")]
-        return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type, "create_count": 0, "skip_count": 0, "error_count": 1})
-
-    try:
-        content = uploaded.read().decode("utf-8")
-    except UnicodeDecodeError:
-        results = [ImportResult(fqdn="", action="error", error_message="UTF-8 でデコードできません")]
-        return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type, "create_count": 0, "skip_count": 0, "error_count": 1})
-
-    if file_type == "zone":
-        origin = request.POST.get("origin", "").strip()
-        if not origin:
-            results = [ImportResult(fqdn="", action="error", error_message="ゾーンオリジンを入力してください")]
+    if file_type == "text":
+        raw = request.POST.get("text_input", "").strip()
+        if not raw:
+            results = [ImportResult(fqdn="", action="error", error_message="FQDNを入力してください")]
             return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type, "create_count": 0, "skip_count": 0, "error_count": 1})
-        results = parse_zone_file(content, origin=origin)
+        results = parse_text_input(raw)
+        if not results:
+            results = [ImportResult(fqdn="", action="error", error_message="有効なFQDNが含まれていません")]
+            return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type, "create_count": 0, "skip_count": 0, "error_count": 1})
     else:
-        results = parse_csv_file(content)
+        uploaded = request.FILES.get("file")
+        if not uploaded:
+            results = [ImportResult(fqdn="", action="error", error_message="ファイルが選択されていません")]
+            return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type, "create_count": 0, "skip_count": 0, "error_count": 1})
+        try:
+            content = uploaded.read().decode("utf-8")
+        except UnicodeDecodeError:
+            results = [ImportResult(fqdn="", action="error", error_message="UTF-8 でデコードできません")]
+            return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type, "create_count": 0, "skip_count": 0, "error_count": 1})
+        if file_type == "zone":
+            origin = request.POST.get("origin", "").strip()
+            if not origin:
+                results = [ImportResult(fqdn="", action="error", error_message="ゾーンオリジンを入力してください")]
+                return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type, "create_count": 0, "skip_count": 0, "error_count": 1})
+            results = parse_zone_file(content, origin=origin)
+        else:
+            results = parse_csv_file(content)
 
     existing = set(Domain.objects.values_list("fqdn", flat=True))
     for result in results:

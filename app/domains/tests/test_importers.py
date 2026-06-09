@@ -1,4 +1,4 @@
-from domains.importers import ImportResult, parse_csv_file, parse_zone_file
+from domains.importers import ImportResult, parse_csv_file, parse_zone_file, parse_text_input
 
 
 SAMPLE_ZONE = """\
@@ -73,3 +73,36 @@ def test_parse_csv_file_maps_optional_fields():
     corp = next(result for result in results if result.fqdn == "example.co.jp")
     assert corp.extra.get("purpose") == "コーポレートドメイン"
     assert corp.extra.get("expires_at") == "2027-01-01"
+
+
+def test_parse_text_input_valid_fqdns():
+    content = "example.co.jp\nsub.example.co.jp\n"
+    results = parse_text_input(content)
+    creates = [r for r in results if r.action == "create"]
+    assert [r.fqdn for r in creates] == ["example.co.jp", "sub.example.co.jp"]
+
+
+def test_parse_text_input_skips_blank_and_comment_lines():
+    content = "example.co.jp\n\n# this is a comment\nsub.example.co.jp\n"
+    results = parse_text_input(content)
+    assert len(results) == 2
+    assert all(r.action == "create" for r in results)
+
+
+def test_parse_text_input_invalid_fqdn_marked_error():
+    content = "valid.co.jp\n..invalid..\nother.co.jp\n"
+    results = parse_text_input(content)
+    errors = [r for r in results if r.action == "error"]
+    assert len(errors) == 1
+    assert errors[0].fqdn == "..invalid.."
+
+
+def test_parse_text_input_empty_content_returns_empty_list():
+    assert parse_text_input("") == []
+    assert parse_text_input("# comment only\n") == []
+
+
+def test_parse_text_input_normalizes_case():
+    results = parse_text_input("Example.CO.JP\nSUB.Example.co.jp\n")
+    fqdns = [r.fqdn for r in results if r.action == "create"]
+    assert fqdns == ["example.co.jp", "sub.example.co.jp"]
