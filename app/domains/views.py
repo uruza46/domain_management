@@ -22,6 +22,16 @@ from .services import (
 )
 
 
+def _find_import_parent(fqdn: str, created_by_fqdn: dict) -> "Domain | None":
+    parts = fqdn.split(".")
+    for idx in range(1, len(parts) - 1):
+        suffix = ".".join(parts[idx:])
+        parent = created_by_fqdn.get(suffix) or Domain.objects.filter(fqdn=suffix).first()
+        if parent is not None:
+            return parent
+    return None
+
+
 @login_required
 def dashboard(request):
     from collection_jobs.models import BatchRun, CollectionJob, CollectionResult
@@ -139,11 +149,14 @@ def import_commit(request):
         messages.error(request, "登録先の管理単位がありません")
         return redirect("import_form")
 
-    created_count = 0
-    for item in raw_results:
-        if item["action"] != "create":
-            continue
+    create_items = sorted(
+        [item for item in raw_results if item["action"] == "create"],
+        key=lambda item: item["fqdn"].count("."),
+    )
 
+    created_by_fqdn: dict = {}
+    created_count = 0
+    for item in create_items:
         fqdn = item["fqdn"]
         extra = item.get("extra", {})
 
@@ -168,10 +181,12 @@ def import_commit(request):
                         "collected_at": timezone.now(),
                     },
                 )
+            created_by_fqdn[fqdn] = domain
             created_count += 1
             continue
 
-        Domain.objects.update_or_create(
+        parent = _find_import_parent(fqdn, created_by_fqdn)
+        domain, _ = Domain.objects.update_or_create(
             fqdn=fqdn,
             defaults={
                 "domain_type": extra.get("domain_type", Domain.TYPE_SUBDOMAIN),
@@ -179,8 +194,10 @@ def import_commit(request):
                 "mgmt_category": extra.get("mgmt_category", Domain.CATEGORY_MANAGED),
                 "management_unit": management_unit,
                 "purpose": extra.get("purpose", ""),
+                "parent_domain": parent,
             },
         )
+        created_by_fqdn[fqdn] = domain
         created_count += 1
 
     messages.success(request, f"{created_count} 件を登録しました")

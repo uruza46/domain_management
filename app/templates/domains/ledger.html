@@ -69,6 +69,7 @@
       <input type="hidden" name="view" value="{{ view_mode }}">
       <input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="ドメインを検索..." style="width:220px">
     </form>
+    <a href="{% url 'import_form' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-upload"></i> インポート</a>
     <div class="btn-group btn-group-sm">
       <a href="?view=list" class="btn {% if view_mode != 'tree' %}btn-primary{% else %}btn-outline-secondary{% endif %}"><i class="bi bi-list-ul"></i> 一覧</a>
       <a href="?view=tree" class="btn {% if view_mode == 'tree' %}btn-primary{% else %}btn-outline-secondary{% endif %}"><i class="bi bi-diagram-3"></i> ツリー</a>
