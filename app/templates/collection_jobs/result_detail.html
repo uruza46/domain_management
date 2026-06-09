@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Collection Result{% endblock %}
+{% block nav_history %}active{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-3">
+  <a href="{% url 'domain_ledger' %}" class="text-decoration-none text-muted small">ドメイン台帳</a>
+  <span class="text-muted small">/</span>
+  <a href="{% url 'collection_history' result.domain.id %}" class="text-decoration-none text-muted small">{{ result.domain.fqdn }}</a>
+  <span class="text-muted small">/</span>
+  <span class="small">収集結果詳細</span>
+</div>
+
+<div class="d-flex align-items-start justify-content-between mb-3">
+  <div>
+    <h1 class="page-title mb-1">{{ result.result_type }}</h1>
+    <div class="text-muted small" style="font-family:monospace">{{ result.domain.fqdn }}</div>
+  </div>
+  <span class="badge {% if result.status == 'succeeded' %}bg-success-subtle text-success{% elif result.status == 'failed' %}bg-danger-subtle text-danger{% else %}bg-secondary-subtle text-secondary{% endif %}">
+    {{ result.status }}
+  </span>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-6">
+    <div class="form-card h-100">
+      <h2 class="h6 mb-3">Metadata</h2>
+      <table class="table table-sm mb-0">
+        <tbody>
+          <tr><th class="text-muted">Domain</th><td style="font-family:monospace">{{ result.domain.fqdn }}</td></tr>
+          <tr><th class="text-muted">Trigger</th><td>{{ result.job.trigger_type }}</td></tr>
+          <tr><th class="text-muted">Method</th><td>{{ result.method }}</td></tr>
+          <tr><th class="text-muted">Source</th><td>{{ result.source_name }}</td></tr>
+          <tr><th class="text-muted">Observed</th><td>{{ result.observed_at|date:"Y-m-d H:i" }}</td></tr>
+          <tr><th class="text-muted">Duration</th><td>{{ result.duration_ms }} ms</td></tr>
+          <tr><th class="text-muted">Changed</th><td>{% if result.changed %}yes{% else %}no{% endif %}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="form-card h-100">
+      <h2 class="h6 mb-3">Summary</h2>
+      <p class="small mb-3">{{ result.raw_summary|default:"No summary" }}</p>
+      {% if result.error_code or result.error_message %}
+      <div class="alert alert-danger small mb-0">
+        <div class="fw-semibold">{{ result.error_code }}</div>
+        <div>{{ result.error_message }}</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="form-card mb-3">
+  <h2 class="h6 mb-3">Payload</h2>
+  <pre class="mb-0 p-3 bg-light border rounded small" style="white-space:pre-wrap">{{ payload_pretty }}</pre>
+</div>
+
+{% if result.diff_json %}
+<div class="form-card">
+  <h2 class="h6 mb-3">Diff</h2>
+  <pre class="mb-0 p-3 bg-light border rounded small" style="white-space:pre-wrap">{{ diff_pretty }}</pre>
+</div>
+{% endif %}
+{% endblock %}

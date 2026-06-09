@@ -1,9 +1,11 @@
 import pytest
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 
-from collection_jobs.models import CollectionJob, CollectionResult
+from collection_jobs.models import BatchRun, CollectionJob, CollectionResult
 from collection_jobs.services import queue_collection_job
+from dns_info.models import DnsRecord
 from domains.models import Domain
 from owners.models import ManagementUnit
 
@@ -30,6 +32,52 @@ def test_dashboard_authenticated(client):
     response = client.get("/")
     assert response.status_code == 200
     assert "Domain Management" in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_dashboard_shows_collection_summary(client):
+    User = get_user_model()
+    User.objects.create_user(username="admin", password="admin123")
+    unit = ManagementUnit.objects.create(
+        unit_type=ManagementUnit.UNIT_REGISTERED_DOMAIN,
+        unit_name="example.co.jp",
+        setting_type=ManagementUnit.SETTING_INDIVIDUAL,
+    )
+    collected = Domain.objects.create(
+        fqdn="collected.example.co.jp",
+        domain_type=Domain.TYPE_SUBDOMAIN,
+        status=Domain.STATUS_ACTIVE,
+        mgmt_category=Domain.CATEGORY_MANAGED,
+        management_unit=unit,
+        collected_at=timezone.now(),
+    )
+    Domain.objects.create(
+        fqdn="uncollected.example.co.jp",
+        domain_type=Domain.TYPE_SUBDOMAIN,
+        status=Domain.STATUS_ACTIVE,
+        mgmt_category=Domain.CATEGORY_MANAGED,
+        management_unit=unit,
+    )
+    queue_collection_job(collected, [CollectionResult.TYPE_DNS_RECORDS], trigger_type=CollectionJob.TRIGGER_MANUAL)
+    BatchRun.objects.create(
+        requested_types=[CollectionResult.TYPE_DNS_RECORDS],
+        status=BatchRun.STATUS_PARTIAL,
+        processed_count=3,
+        succeeded_count=2,
+        failed_count=1,
+    )
+
+    client.login(username="admin", password="admin123")
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.context["collected_count"] == 1
+    assert response.context["uncollected_count"] == 1
+    assert response.context["active_collection_job_count"] == 1
+    assert response.context["latest_batch"].status == BatchRun.STATUS_PARTIAL
+    body = response.content.decode()
+    assert "Collection Coverage" in body
+    assert "Latest Batch" in body
 
 
 @pytest.fixture
@@ -129,3 +177,60 @@ def test_domain_panel_links_to_collection_history_and_request(ledger_client, led
     assert "情報収集" in body
     assert f"/collections/domains/{domain.id}/history/" in body
     assert f"/collections/domains/{domain.id}/request/" in body
+
+
+@pytest.mark.django_db
+def test_domain_panel_shows_latest_confirmed_dns_records(ledger_client, ledger_data):
+    domain = Domain.objects.get(fqdn="example.co.jp")
+    job = queue_collection_job(domain, [CollectionResult.TYPE_DNS_RECORDS], trigger_type=CollectionJob.TRIGGER_MANUAL)
+    observed_at = timezone.now()
+    CollectionResult.objects.create(
+        job=job,
+        domain=domain,
+        result_type=CollectionResult.TYPE_DNS_RECORDS,
+        method=CollectionResult.METHOD_DNS_QUERY,
+        source_name="8.8.8.8",
+        status=CollectionResult.STATUS_SUCCEEDED,
+        observed_at=observed_at,
+    )
+    DnsRecord.objects.create(
+        domain=domain,
+        record_type=DnsRecord.TYPE_A,
+        name=domain.fqdn,
+        value="203.0.113.10",
+        ttl=300,
+        collected_at=observed_at,
+    )
+
+    response = ledger_client.get(f"/domains/ledger/{domain.id}/panel/")
+
+    assert response.status_code == 200
+    body = response.content.decode()
+    assert "Latest DNS" in body
+    assert "dns_query" in body
+    assert "8.8.8.8" in body
+    assert "203.0.113.10" in body
+
+
+@pytest.mark.django_db
+def test_domain_panel_shows_latest_dns_failure_state(ledger_client, ledger_data):
+    domain = Domain.objects.get(fqdn="example.co.jp")
+    job = queue_collection_job(domain, [CollectionResult.TYPE_DNS_RECORDS], trigger_type=CollectionJob.TRIGGER_MANUAL)
+    CollectionResult.objects.create(
+        job=job,
+        domain=domain,
+        result_type=CollectionResult.TYPE_DNS_RECORDS,
+        method=CollectionResult.METHOD_DNS_QUERY,
+        source_name="8.8.8.8",
+        status=CollectionResult.STATUS_FAILED,
+        observed_at=timezone.now(),
+        error_code="timeout",
+        error_message="DNS query timed out",
+    )
+
+    response = ledger_client.get(f"/domains/ledger/{domain.id}/panel/")
+
+    assert response.status_code == 200
+    body = response.content.decode()
+    assert "Latest DNS failed" in body
+    assert "timeout" in body

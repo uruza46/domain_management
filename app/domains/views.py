@@ -1,10 +1,12 @@
+from datetime import timedelta
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .importers import ImportResult, parse_csv_file, parse_zone_file
+from .importers import ImportResult, parse_csv_file, parse_text_input, parse_zone_file
 from .models import Domain
 from .services import (
     STATUS_DISPLAY,
@@ -20,13 +22,73 @@ from .services import (
 )
 
 
+# Second-level domains under ccTLDs that behave as TLDs — never synthesize these.
+_PUBLIC_SLDS = frozenset({
+    "co.jp", "ne.jp", "or.jp", "ac.jp", "go.jp", "ed.jp", "gr.jp", "ad.jp",
+    "co.uk", "me.uk", "org.uk", "net.uk",
+    "com.au", "net.au", "org.au",
+    "co.nz", "net.nz", "co.kr", "or.kr",
+})
+
+
+def _min_ancestor_labels(fqdn: str) -> int:
+    """Minimum label count an ancestor must have to be a synthesisable domain (not a TLD)."""
+    parts = fqdn.split(".")
+    if len(parts) >= 2 and f"{parts[-2]}.{parts[-1]}" in _PUBLIC_SLDS:
+        return 3
+    return 2
+
+
+def _synthetic_ancestors(fqdns: list[str]) -> list[str]:
+    """Return ancestor FQDNs that are missing from both the batch and the DB."""
+    batch = set(fqdns)
+    candidates: set[str] = set()
+    for fqdn in fqdns:
+        parts = fqdn.split(".")
+        min_labels = _min_ancestor_labels(fqdn)
+        for idx in range(1, len(parts) - 1):
+            ancestor = ".".join(parts[idx:])
+            if ancestor.count(".") + 1 < min_labels:
+                break
+            if ancestor not in batch:
+                candidates.add(ancestor)
+    if not candidates:
+        return []
+    existing = set(Domain.objects.filter(fqdn__in=candidates).values_list("fqdn", flat=True))
+    return [c for c in candidates if c not in existing]
+
+
+def _find_import_parent(fqdn: str, created_by_fqdn: dict) -> "Domain | None":
+    parts = fqdn.split(".")
+    for idx in range(1, len(parts) - 1):
+        suffix = ".".join(parts[idx:])
+        parent = created_by_fqdn.get(suffix) or Domain.objects.filter(fqdn=suffix).first()
+        if parent is not None:
+            return parent
+    return None
+
+
 @login_required
 def dashboard(request):
+    from collection_jobs.models import BatchRun, CollectionJob, CollectionResult
+
+    recent_failure_window = timezone.now() - timedelta(days=7)
     context = {
         "managed_count": Domain.objects.filter(mgmt_category=Domain.CATEGORY_MANAGED).count(),
         "individual_count": Domain.objects.filter(mgmt_category=Domain.CATEGORY_INDIVIDUAL).count(),
         "expiring_count": Domain.objects.filter(expires_at__isnull=False).count(),
         "inventory_unanswered_count": 0,
+        "collected_count": Domain.objects.filter(collected_at__isnull=False).count(),
+        "uncollected_count": Domain.objects.filter(collected_at__isnull=True).count(),
+        "active_collection_job_count": CollectionJob.objects.filter(
+            status__in=[CollectionJob.STATUS_QUEUED, CollectionJob.STATUS_RUNNING]
+        ).count(),
+        "recent_failed_result_count": CollectionResult.objects.filter(
+            status=CollectionResult.STATUS_FAILED,
+            observed_at__gte=recent_failure_window,
+        ).count(),
+        "latest_batch": BatchRun.objects.order_by("-started_at").first(),
+        "recent_collection_results": CollectionResult.objects.select_related("domain").order_by("-observed_at")[:5],
     }
     return render(request, "dashboard.html", context)
 
@@ -40,30 +102,38 @@ def import_form(request):
 @require_POST
 def import_preview(request):
     file_type = request.POST.get("file_type", "")
-    uploaded = request.FILES.get("file")
 
-    if file_type not in ("zone", "csv"):
+    if file_type not in ("zone", "csv", "text"):
         results = [ImportResult(fqdn="", action="error", error_message="ファイル種別が不正です")]
         return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type, "create_count": 0, "skip_count": 0, "error_count": 1})
 
-    if not uploaded:
-        results = [ImportResult(fqdn="", action="error", error_message="ファイルが選択されていません")]
-        return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type, "create_count": 0, "skip_count": 0, "error_count": 1})
-
-    try:
-        content = uploaded.read().decode("utf-8")
-    except UnicodeDecodeError:
-        results = [ImportResult(fqdn="", action="error", error_message="UTF-8 でデコードできません")]
-        return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type, "create_count": 0, "skip_count": 0, "error_count": 1})
-
-    if file_type == "zone":
-        origin = request.POST.get("origin", "").strip()
-        if not origin:
-            results = [ImportResult(fqdn="", action="error", error_message="ゾーンオリジンを入力してください")]
+    if file_type == "text":
+        raw = request.POST.get("text_input", "").strip()
+        if not raw:
+            results = [ImportResult(fqdn="", action="error", error_message="FQDNを入力してください")]
             return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type, "create_count": 0, "skip_count": 0, "error_count": 1})
-        results = parse_zone_file(content, origin=origin)
+        results = parse_text_input(raw)
+        if not results:
+            results = [ImportResult(fqdn="", action="error", error_message="有効なFQDNが含まれていません")]
+            return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type, "create_count": 0, "skip_count": 0, "error_count": 1})
     else:
-        results = parse_csv_file(content)
+        uploaded = request.FILES.get("file")
+        if not uploaded:
+            results = [ImportResult(fqdn="", action="error", error_message="ファイルが選択されていません")]
+            return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type, "create_count": 0, "skip_count": 0, "error_count": 1})
+        try:
+            content = uploaded.read().decode("utf-8")
+        except UnicodeDecodeError:
+            results = [ImportResult(fqdn="", action="error", error_message="UTF-8 でデコードできません")]
+            return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type, "create_count": 0, "skip_count": 0, "error_count": 1})
+        if file_type == "zone":
+            origin = request.POST.get("origin", "").strip()
+            if not origin:
+                results = [ImportResult(fqdn="", action="error", error_message="ゾーンオリジンを入力してください")]
+                return render(request, "domains/import_preview.html", {"results": results, "file_type": file_type, "create_count": 0, "skip_count": 0, "error_count": 1})
+            results = parse_zone_file(content, origin=origin)
+        else:
+            results = parse_csv_file(content)
 
     existing = set(Domain.objects.values_list("fqdn", flat=True))
     for result in results:
@@ -115,11 +185,17 @@ def import_commit(request):
         messages.error(request, "登録先の管理単位がありません")
         return redirect("import_form")
 
-    created_count = 0
-    for item in raw_results:
-        if item["action"] != "create":
-            continue
+    create_items = [item for item in raw_results if item["action"] == "create"]
 
+    if file_type != "zone":
+        for ancestor_fqdn in _synthetic_ancestors([i["fqdn"] for i in create_items]):
+            create_items.append({"fqdn": ancestor_fqdn, "action": "create", "extra": {}})
+
+    create_items.sort(key=lambda item: item["fqdn"].count("."))
+
+    created_by_fqdn: dict = {}
+    created_count = 0
+    for item in create_items:
         fqdn = item["fqdn"]
         extra = item.get("extra", {})
 
@@ -144,10 +220,12 @@ def import_commit(request):
                         "collected_at": timezone.now(),
                     },
                 )
+            created_by_fqdn[fqdn] = domain
             created_count += 1
             continue
 
-        Domain.objects.update_or_create(
+        parent = _find_import_parent(fqdn, created_by_fqdn)
+        domain, _ = Domain.objects.update_or_create(
             fqdn=fqdn,
             defaults={
                 "domain_type": extra.get("domain_type", Domain.TYPE_SUBDOMAIN),
@@ -155,8 +233,10 @@ def import_commit(request):
                 "mgmt_category": extra.get("mgmt_category", Domain.CATEGORY_MANAGED),
                 "management_unit": management_unit,
                 "purpose": extra.get("purpose", ""),
+                "parent_domain": parent,
             },
         )
+        created_by_fqdn[fqdn] = domain
         created_count += 1
 
     messages.success(request, f"{created_count} 件を登録しました")
@@ -178,10 +258,38 @@ def _load_domains():
 
 
 def _panel_context(domain, today):
+    from collection_jobs.models import CollectionResult
+
     labels = domain.fqdn.split(".")
     expiry = latest_cert_expiry(domain)
     parent = domain.fqdn.split(".", 1)[1] if "." in domain.fqdn else "-"
     owner = domain_owner(domain)
+    dns_records = list(domain.dns_records.all())
+    dns_record_groups = []
+    for record_type in ["A", "AAAA", "CNAME", "MX", "NS", "TXT"]:
+        records = [record for record in dns_records if record.record_type == record_type]
+        if records:
+            dns_record_groups.append((record_type, records))
+    latest_dns_result = (
+        CollectionResult.objects
+        .filter(
+            domain=domain,
+            result_type=CollectionResult.TYPE_DNS_RECORDS,
+            status=CollectionResult.STATUS_SUCCEEDED,
+        )
+        .order_by("-observed_at", "-collected_at")
+        .first()
+    )
+    latest_dns_failed_result = (
+        CollectionResult.objects
+        .filter(
+            domain=domain,
+            result_type=CollectionResult.TYPE_DNS_RECORDS,
+            status=CollectionResult.STATUS_FAILED,
+        )
+        .order_by("-observed_at", "-collected_at")
+        .first()
+    )
     return {
         "domain": domain,
         "status_label": STATUS_DISPLAY.get(domain.status, (domain.status, "pending"))[0],
@@ -194,7 +302,10 @@ def _panel_context(domain, today):
         "dept": domain_dept(domain),
         "ssl_expiry": expiry,
         "ssl_state": classify_ssl(expiry, today),
-        "dns_records": list(domain.dns_records.all()),
+        "dns_records": dns_records,
+        "dns_record_groups": dns_record_groups,
+        "latest_dns_result": latest_dns_result,
+        "latest_dns_failed_result": latest_dns_failed_result,
     }
 
 

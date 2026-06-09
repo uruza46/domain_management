@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from django.core.management import call_command
 
-from collection_jobs.models import CollectionJob, CollectionResult
+from collection_jobs.models import BatchRun, CollectionJob, CollectionResult
 from collection_jobs.services import queue_collection_job
 from dns_info.models import DnsRecord
 from domains.models import Domain
@@ -74,6 +74,30 @@ def test_enqueue_collection_jobs_queues_active_domains(domain):
     job = CollectionJob.objects.get(domain=domain)
     assert job.trigger_type == CollectionJob.TRIGGER_SCHEDULED
     assert CollectionResult.TYPE_DNS_RECORDS in job.requested_types
+
+
+@pytest.mark.django_db
+def test_enqueue_collection_jobs_default_types_exclude_http_and_include_security_summary(domain):
+    call_command("enqueue_collection_jobs")
+
+    job = CollectionJob.objects.get(domain=domain)
+    assert CollectionResult.TYPE_DNS_RECORDS in job.requested_types
+    assert CollectionResult.TYPE_MAIL_AUTH in job.requested_types
+    assert CollectionResult.TYPE_CERTIFICATE in job.requested_types
+    assert CollectionResult.TYPE_SECURITY_SUMMARY in job.requested_types
+    assert CollectionResult.TYPE_HTTP_STATUS not in job.requested_types
+
+
+@pytest.mark.django_db
+def test_run_batch_collection_default_types_exclude_http_and_include_security_summary(db):
+    call_command("run_batch_collection", limit=0, max_jobs=0)
+
+    batch = BatchRun.objects.get()
+    assert CollectionResult.TYPE_DNS_RECORDS in batch.requested_types
+    assert CollectionResult.TYPE_MAIL_AUTH in batch.requested_types
+    assert CollectionResult.TYPE_CERTIFICATE in batch.requested_types
+    assert CollectionResult.TYPE_SECURITY_SUMMARY in batch.requested_types
+    assert CollectionResult.TYPE_HTTP_STATUS not in batch.requested_types
 
 
 @pytest.mark.django_db

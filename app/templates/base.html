@@ -38,6 +38,8 @@
       <ul class="nav flex-column pt-1">
         <li><a class="nav-link {% block nav_dashboard %}{% endblock %}" href="{% url 'dashboard' %}"><i class="bi bi-speedometer2"></i>ダッシュボード</a></li>
         <li><a class="nav-link {% block nav_domains %}{% endblock %}" href="{% url 'domain_ledger' %}"><i class="bi bi-list-ul"></i>ドメイン台帳</a></li>
+        <li><a class="nav-link {% block nav_batch %}{% endblock %}" href="{% url 'batch_run_list' %}"><i class="bi bi-arrow-repeat"></i>収集バッチ履歴</a></li>
+        <li><a class="nav-link {% block nav_history %}{% endblock %}" href="{% url 'collection_history' %}"><i class="bi bi-clock-history"></i>収集結果履歴</a></li>
         <li><a class="nav-link {% block nav_requests %}{% endblock %}" href="{% url 'request_list' %}"><i class="bi bi-file-earmark-plus"></i>取得申請</a></li>
         <li><a class="nav-link disabled" href="#"><i class="bi bi-eye"></i>監視対象</a></li>
         <li><a class="nav-link disabled" href="#"><i class="bi bi-exclamation-triangle"></i>インシデント</a></li>
@@ -82,8 +84,18 @@
   document.body.addEventListener('htmx:configRequest', function (e) {
     e.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
   });
-  document.querySelectorAll('#toast-container .toast').forEach(function (el) {
-    new bootstrap.Toast(el, { delay: 4000 }).show();
+  function showPendingToasts(root) {
+    (root || document).querySelectorAll('#toast-container .toast:not([data-toast-ready])').forEach(function (el) {
+      el.dataset.toastReady = 'true';
+      new bootstrap.Toast(el, { delay: 4000 }).show();
+    });
+  }
+  showPendingToasts(document);
+  document.body.addEventListener('htmx:afterSwap', function () {
+    showPendingToasts(document);
+  });
+  document.body.addEventListener('htmx:oobAfterSwap', function () {
+    showPendingToasts(document);
   });
 </script>
 </body>

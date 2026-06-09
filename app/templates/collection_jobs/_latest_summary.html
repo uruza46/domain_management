@@ -6,11 +6,11 @@
   {% if domain.collected_at %}
   <div class="small text-muted mb-2">最終収集: {{ domain.collected_at|date:"Y-m-d H:i" }}</div>
   {% endif %}
-  <form hx-post="/collections/domains/{{ domain.id }}/request/" hx-target="#collection-request-result" hx-swap="innerHTML" class="d-flex align-items-center gap-2">
+  <form hx-post="/collections/domains/{{ domain.id }}/request/" hx-target="#collection-request-feedback" hx-swap="innerHTML" class="d-flex align-items-center gap-2">
     {% csrf_token %}
     <input type="hidden" name="types" value="dns_records">
     <input type="hidden" name="types" value="certificate">
     <button class="btn btn-sm btn-outline-primary" type="submit">収集リクエスト</button>
-    <span id="collection-request-result" class="small text-muted"></span>
+    <span id="collection-request-feedback"><span id="collection-request-result" class="small text-muted"></span></span>
   </form>
 </div>

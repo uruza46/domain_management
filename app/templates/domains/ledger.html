@@ -16,8 +16,8 @@
   .chip.active{background:#1e293b;color:#fff;border-color:#1e293b}
   .ledger-row:hover{background:#f9fafb}
   .ledger-row.is-selected{background:#e0edff;outline:2px solid #3b82f6;outline-offset:-2px}
-  .ledger-grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px}
-  .drawer-card{background:#fff;border:1px solid #e5e7eb;border-radius:8px;min-height:300px}
+  .ledger-grid{display:grid;grid-template-columns:minmax(0,1fr) 6px var(--panel-width,360px);gap:0;flex:1 1 0;min-height:0;overflow:hidden}
+  .drawer-card{background:#fff;border:1px solid #e5e7eb;border-radius:8px;min-height:0}
   .miller{display:flex;overflow-x:auto;min-height:640px}
   .miller .col{min-width:260px;max-width:260px;border-right:1px solid #eef0f3}
   .miller .cell{width:100%;border:0;background:transparent;display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;font-family:monospace;font-size:.82rem;text-align:left;color:#111827}
@@ -27,9 +27,38 @@
   .miller .cell .dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
   .miller .cell-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .miller .cell .chev{margin-left:auto;color:#6b7280;flex:0 0 auto}
-  @media (max-width: 980px){.ledger-grid{grid-template-columns:1fr}.drawer-card{min-height:auto}.miller{min-height:420px}}
+  @media (max-width: 980px){.ledger-grid{grid-template-columns:1fr}.drawer-card{min-height:auto}.miller{min-height:420px}.ledger-scroll-right{height:auto;overflow-y:visible}}
+  body:has(.ledger-body) { overflow: hidden; }
+  .main-content {
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 0;
+  }
+  .ledger-body {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .ledger-body .miller { min-height: 0; }
+  .ledger-scroll-left  { overflow-y: auto; height: 100%; }
+  .ledger-scroll-right { overflow-y: auto; height: 100%; }
+  .panel-resize-handle {
+    cursor: col-resize;
+    background: transparent;
+    position: relative;
+    z-index: 10;
+  }
+  .panel-resize-handle:hover,
+  .panel-resize-handle.is-dragging {
+    background: #e0e7ff;
+  }
 </style>
 
+<div class="ledger-body">
 <div class="d-flex align-items-center justify-content-between mb-3">
   <div>
     <h1 class="page-title">ドメイン台帳</h1>
@@ -40,6 +69,7 @@
       <input type="hidden" name="view" value="{{ view_mode }}">
       <input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="ドメインを検索..." style="width:220px">
     </form>
+    <a href="{% url 'import_form' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-upload"></i> インポート</a>
     <div class="btn-group btn-group-sm">
       <a href="?view=list" class="btn {% if view_mode != 'tree' %}btn-primary{% else %}btn-outline-secondary{% endif %}"><i class="bi bi-list-ul"></i> 一覧</a>
       <a href="?view=tree" class="btn {% if view_mode == 'tree' %}btn-primary{% else %}btn-outline-secondary{% endif %}"><i class="bi bi-diagram-3"></i> ツリー</a>
@@ -58,8 +88,8 @@
   <span class="ms-auto text-muted small align-self-center">基準日 {{ today|date:'Y/m/d' }}</span>
 </div>
 
-<div class="ledger-grid" data-view-mode="{{ view_mode }}">
-  <div>
+<div class="ledger-grid" id="ledger-grid" data-view-mode="{{ view_mode }}">
+  <div class="ledger-scroll-left">
     {% if view_mode == 'tree' %}
       <div class="drawer-card p-2">
         <div class="miller" id="miller">
@@ -70,10 +100,12 @@
       <div id="list-region">{% include "domains/_list.html" %}</div>
     {% endif %}
   </div>
-  <div class="drawer-card p-3" id="drawer">
+  <div class="panel-resize-handle" id="panel-resize-handle"></div>
+  <div class="drawer-card ledger-scroll-right p-3" id="drawer">
     {% if panel %}{% include "domains/_panel.html" %}{% else %}<div class="text-muted text-center py-5">ドメインを選択してください</div>{% endif %}
   </div>
 </div>
+</div>{# end .ledger-body #}
 
 <script>
 (() => {
@@ -89,7 +121,7 @@
     if (!item || !item.dataset.panelUrl || !drawer) return Promise.resolve();
     return fetch(item.dataset.panelUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(response => response.text())
-      .then(html => { drawer.innerHTML = html; });
+      .then(html => { drawer.innerHTML = html; if (typeof htmx !== 'undefined') htmx.process(drawer); });
   }
 
   function removeTreeColumnsRightOf(depth) {
@@ -184,6 +216,39 @@
 
   const initial = selectableItems()[0];
   if (initial) selectItem(initial, { expand: false, focus: false, panel: false });
+})();
+
+(() => {
+  const STORAGE_KEY = 'domain-ledger-panel-width';
+  const MIN = 240, MAX = 640, DEFAULT = 360;
+  const grid = document.getElementById('ledger-grid');
+  const handle = document.getElementById('panel-resize-handle');
+  if (!grid || !handle) return;
+
+  function setWidth(w) {
+    const clamped = Math.max(MIN, Math.min(MAX, w));
+    grid.style.setProperty('--panel-width', clamped + 'px');
+    return clamped;
+  }
+
+  const saved = parseInt(localStorage.getItem(STORAGE_KEY), 10);
+  if (!isNaN(saved)) setWidth(saved);
+
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    handle.classList.add('is-dragging');
+    function onMove(e) {
+      setWidth(grid.getBoundingClientRect().right - e.clientX);
+    }
+    function onUp(e) {
+      handle.classList.remove('is-dragging');
+      localStorage.setItem(STORAGE_KEY, setWidth(grid.getBoundingClientRect().right - e.clientX));
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
 })();
 </script>
 {% endblock %}

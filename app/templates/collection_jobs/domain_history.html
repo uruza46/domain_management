@@ -73,7 +73,7 @@
       <tbody>
         {% for r in results %}
         <tr>
-          <td class="small" style="font-family:monospace;white-space:nowrap">{{ r.observed_at|date:"Y-m-d H:i" }}</td>
+          <td class="small" style="font-family:monospace;white-space:nowrap"><a href="{% url 'collection_result_detail' r.id %}">{{ r.observed_at|date:"Y-m-d H:i" }}</a></td>
           <td class="small">{{ r.result_type }}</td>
           <td class="small">{{ r.job.trigger_type }}</td>
           <td class="small">{{ r.method }}</td>

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Batch Runs{% endblock %}
+{% block nav_batch %}active{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="page-title mb-0">収集バッチ履歴</h1>
+</div>
+
+<form method="get" class="row g-2 align-items-end mb-3">
+  <div class="col-auto">
+    <select name="status" class="form-select form-select-sm">
+      <option value="">status: all</option>
+      <option value="succeeded"{% if filter_status == "succeeded" %} selected{% endif %}>succeeded</option>
+      <option value="partial"{% if filter_status == "partial" %} selected{% endif %}>partial</option>
+      <option value="failed"{% if filter_status == "failed" %} selected{% endif %}>failed</option>
+      <option value="running"{% if filter_status == "running" %} selected{% endif %}>running</option>
+    </select>
+  </div>
+  <div class="col-auto"><input class="form-control form-control-sm" type="date" name="date_from" value="{{ date_from }}"></div>
+  <div class="col-auto"><input class="form-control form-control-sm" type="date" name="date_to" value="{{ date_to }}"></div>
+  <div class="col-auto"><button type="submit" class="btn btn-sm btn-outline-secondary">Filter</button></div>
+</form>
+
+<div class="card shadow-sm border-0">
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Started</th><th>Finished</th><th>Status</th><th>Types</th><th>Enqueued</th><th>Processed</th><th>Succeeded</th><th>Failed</th><th>ID</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for batch in page_obj.object_list %}
+        <tr>
+          <td class="small">{{ batch.started_at|date:"Y-m-d H:i" }}</td>
+          <td class="small">{{ batch.finished_at|date:"Y-m-d H:i"|default:"-" }}</td>
+          <td class="small">
+            <span class="badge {% if batch.status == 'succeeded' %}bg-success-subtle text-success{% elif batch.status == 'failed' %}bg-danger-subtle text-danger{% elif batch.status == 'partial' %}bg-warning-subtle text-warning{% else %}bg-primary-subtle text-primary{% endif %}">{{ batch.status }}</span>
+          </td>
+          <td class="small">{{ batch.requested_types|join:", " }}</td>
+          <td class="small text-end">{{ batch.enqueued_count }}</td>
+          <td class="small text-end">{{ batch.processed_count }}</td>
+          <td class="small text-end">{{ batch.succeeded_count }}</td>
+          <td class="small text-end">{{ batch.failed_count }}</td>
+          <td class="small" style="font-family:monospace">{{ batch.id }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="9" class="text-center text-muted py-4 small">No batch runs</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

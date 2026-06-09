@@ -476,3 +476,44 @@ DP1 のモデルと seed_data は、DP2 でそのまま使う。
 - 用語整合: 管理対象、個別管理対象、監視対象を分けた。
 - セキュリティ: 機密情報そのものを保持しない方針を明記した。
 - 受け入れ条件: Docker、Django、seed、pytest、ブラウザ確認を含めた。
+
+---
+
+## 15. 実装状況（2026-06-09）
+
+### 15.1 DP1 受け入れ条件達成状況
+
+全12条件を満たして完了。`pytest -v` で **124 tests passed**。
+
+### 15.2 DP1 スコープ外の追加実装
+
+DP1 フェーズ中に以下を先行実装した。後続フェーズの計画を更新すること。
+
+| 内容 | 当初フェーズ | 状態 |
+| --- | --- | --- |
+| ドメイン台帳一覧（ツリー表示 + パネル）、htmx 部分更新 | DP2 | 完了 |
+| Zone ファイル / CSV インポート | DP2 | 完了 |
+| `collection_jobs` app（DNS / HTTP / 証明書 / メール認証 / セキュリティサマリ収集、バッチ実行基盤） | DP6 | 完了 |
+| `requests` app（ドメイン取得申請 + ブランド・知財レビューワークフロー） | DP3 | 完了 |
+| 管理単位（名前空間）一覧ビュー | DP2 | 完了 |
+
+### 15.3 実装時の設計判断
+
+#### `fqdn_reversed` フィールド
+
+`Domain.fqdn_reversed`、`ManagementUnit.fqdn_reversed` を追加（`2-data_design.md` 反映済み）。
+
+- `softbank.co.jp` → `jp.co.softbank` のようにラベルを逆順に格納する
+- `ORDER BY fqdn_reversed` で兄弟ドメインが隣接し、ツリー表示ソートが O(n log n) で実現できる
+- `fqdn_reversed LIKE 'jp.co.softbank.%'` によるサブドメイン範囲検索も可能
+- `save()` オーバーライドで自動計算、`editable=False`。`update_fields` 指定時も自動追加
+
+#### OSINT 中間ノードの合成
+
+OSINT 収集データは末端ホストのみを含み、`bb.softbank.co.jp` のような中間レベルが欠落することがある。このままでは `m1.bb.softbank.co.jp` 等が root 直下 L1 として表示される。
+
+`osint_seed.py` の `_collect_intermediates()` で、各ホスト FQDN とそのルートドメインの間に存在する全中間 FQDN を列挙し、ホスト登録前にドット数昇順（親→子）で合成ノードを生成する。
+
+- softbank.co.jp / softbank.jp / softbank.ne.jp の 969 ホストに対して **212 件** の中間ノードが合成された
+- 合成ノードは `purpose = "OSINT intermediate node (synthesized)"` で識別できる
+- `seed_softbank_osint_data()` は冪等。再実行で既存ホストの `parent_domain` も正しい中間ノードに更新される

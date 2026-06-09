@@ -8,6 +8,7 @@ DEFAULT_TYPES = [
     CollectionResult.TYPE_DNS_RECORDS,
     CollectionResult.TYPE_MAIL_AUTH,
     CollectionResult.TYPE_CERTIFICATE,
+    CollectionResult.TYPE_SECURITY_SUMMARY,
 ]
 
 

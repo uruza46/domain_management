@@ -20,5 +20,47 @@
     <dt class="col-4 text-muted">DNSレコード</dt>
     <dd class="col-8">{{ dns_records|length }}</dd>
   </dl>
+
+  <div class="mt-3 pt-3 border-top">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <span class="small fw-semibold text-muted">Latest DNS</span>
+      {% if latest_dns_result %}
+      <span class="badge bg-light text-secondary border">{{ latest_dns_result.observed_at|date:"Y-m-d H:i" }}</span>
+      {% endif %}
+    </div>
+
+    {% if latest_dns_result %}
+    <div class="small text-muted mb-2">
+      {{ latest_dns_result.method }} / {{ latest_dns_result.source_name }}
+    </div>
+    {% if dns_record_groups %}
+    <div class="d-flex flex-column gap-2">
+      {% for record_type, records in dns_record_groups %}
+      <div>
+        <div class="small fw-semibold text-secondary mb-1">{{ record_type }}</div>
+        {% for record in records %}
+        <div class="small border rounded px-2 py-1 mb-1" style="background:#f8fafc">
+          <div class="text-break" style="font-family:monospace">{{ record.value }}</div>
+          <div class="text-muted">TTL {% if record.ttl %}{{ record.ttl }}{% else %}-{% endif %}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-muted small">Latest DNS collection succeeded but returned no records.</div>
+    {% endif %}
+    {% elif latest_dns_failed_result %}
+    <div class="small text-danger">Latest DNS failed: {{ latest_dns_failed_result.error_code }}</div>
+    {% if latest_dns_failed_result.error_message %}
+    <div class="small text-muted text-break">{{ latest_dns_failed_result.error_message }}</div>
+    {% endif %}
+    {% elif dns_records %}
+    <div class="text-muted small">Stored DNS records exist, but no successful DNS collection result is recorded.</div>
+    {% else %}
+    <div class="text-muted small">DNS has not been collected yet.</div>
+    {% endif %}
+  </div>
+
   {% include "collection_jobs/_latest_summary.html" %}
 </div>

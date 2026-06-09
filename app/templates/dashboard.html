@@ -35,6 +35,75 @@
   </div>
 </div>
 
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="stat-value">{{ collected_count }}</div>
+      <div class="stat-label">Collection Coverage</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="stat-value">{{ uncollected_count }}</div>
+      <div class="stat-label">Uncollected Domains</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="stat-value">{{ active_collection_job_count }}</div>
+      <div class="stat-label">Queued / Running Jobs</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="stat-value">{{ recent_failed_result_count }}</div>
+      <div class="stat-label">Recent Failures</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-lg-5">
+    <div class="form-card h-100">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <strong>Latest Batch</strong>
+        {% if latest_batch %}<span class="status-badge status-ok">{{ latest_batch.status }}</span>{% endif %}
+      </div>
+      {% if latest_batch %}
+      <div class="small text-muted mb-2">{{ latest_batch.started_at|date:"Y-m-d H:i" }}</div>
+      <div class="d-flex gap-3 small">
+        <span>Processed <strong>{{ latest_batch.processed_count }}</strong></span>
+        <span>Succeeded <strong>{{ latest_batch.succeeded_count }}</strong></span>
+        <span>Failed <strong>{{ latest_batch.failed_count }}</strong></span>
+      </div>
+      {% else %}
+      <div class="text-muted small">No batch runs yet.</div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="col-lg-7">
+    <div class="form-card h-100">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <strong>Recent Collection Results</strong>
+        <a href="{% url 'collection_history' %}" class="small text-decoration-none">Open history</a>
+      </div>
+      {% if recent_collection_results %}
+      <div class="d-flex flex-column gap-2">
+        {% for result in recent_collection_results %}
+        <div class="d-flex align-items-center justify-content-between gap-3 small border-bottom pb-2">
+          <span class="text-truncate" style="font-family:monospace">{{ result.domain.fqdn }}</span>
+          <span class="text-muted">{{ result.result_type }}</span>
+          <span class="badge bg-light text-secondary border">{{ result.status }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="text-muted small">No collection results yet.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
 <div class="form-card">
   <div class="d-flex align-items-center gap-2 mb-2">
     <span class="status-badge status-ok"><i class="bi bi-check2-circle"></i>DP1</span>
