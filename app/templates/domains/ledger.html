@@ -16,8 +16,8 @@
   .chip.active{background:#1e293b;color:#fff;border-color:#1e293b}
   .ledger-row:hover{background:#f9fafb}
   .ledger-row.is-selected{background:#e0edff;outline:2px solid #3b82f6;outline-offset:-2px}
-  .ledger-grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px}
-  .drawer-card{background:#fff;border:1px solid #e5e7eb;border-radius:8px;min-height:300px}
+  .ledger-grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;flex:1 1 0;min-height:0;overflow:hidden}
+  .drawer-card{background:#fff;border:1px solid #e5e7eb;border-radius:8px;min-height:0}
   .miller{display:flex;overflow-x:auto;min-height:640px}
   .miller .col{min-width:260px;max-width:260px;border-right:1px solid #eef0f3}
   .miller .cell{width:100%;border:0;background:transparent;display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;font-family:monospace;font-size:.82rem;text-align:left;color:#111827}
@@ -27,9 +27,28 @@
   .miller .cell .dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
   .miller .cell-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .miller .cell .chev{margin-left:auto;color:#6b7280;flex:0 0 auto}
-  @media (max-width: 980px){.ledger-grid{grid-template-columns:1fr}.drawer-card{min-height:auto}.miller{min-height:420px}}
+  @media (max-width: 980px){.ledger-grid{grid-template-columns:1fr}.drawer-card{min-height:auto}.miller{min-height:420px}.ledger-scroll-right{height:auto;overflow-y:visible}}
+  body:has(.ledger-body) { overflow: hidden; }
+  .main-content {
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 0;
+  }
+  .ledger-body {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .ledger-body .miller { min-height: 0; }
+  .ledger-scroll-left  { overflow-y: auto; height: 100%; }
+  .ledger-scroll-right { overflow-y: auto; height: 100%; }
 </style>
 
+<div class="ledger-body">
 <div class="d-flex align-items-center justify-content-between mb-3">
   <div>
     <h1 class="page-title">ドメイン台帳</h1>
@@ -58,8 +77,8 @@
   <span class="ms-auto text-muted small align-self-center">基準日 {{ today|date:'Y/m/d' }}</span>
 </div>
 
-<div class="ledger-grid" data-view-mode="{{ view_mode }}">
-  <div>
+<div class="ledger-grid" id="ledger-grid" data-view-mode="{{ view_mode }}">
+  <div class="ledger-scroll-left">
     {% if view_mode == 'tree' %}
       <div class="drawer-card p-2">
         <div class="miller" id="miller">
@@ -70,10 +89,11 @@
       <div id="list-region">{% include "domains/_list.html" %}</div>
     {% endif %}
   </div>
-  <div class="drawer-card p-3" id="drawer">
+  <div class="drawer-card ledger-scroll-right p-3" id="drawer">
     {% if panel %}{% include "domains/_panel.html" %}{% else %}<div class="text-muted text-center py-5">ドメインを選択してください</div>{% endif %}
   </div>
 </div>
+</div>{# end .ledger-body #}
 
 <script>
 (() => {
