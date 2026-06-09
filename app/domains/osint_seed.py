@@ -42,6 +42,26 @@ def _label_count(fqdn: str) -> int:
     return fqdn.count(".") + 1
 
 
+def _collect_intermediates(hosts: list[OsintHost]) -> list[tuple[str, str]]:
+    """Return (intermediate_fqdn, root_fqdn) pairs for every FQDN that lies between
+    a host and its root but is not itself a host entry.
+    Sorted ascending by dot count so parents are always created before their children.
+    """
+    host_set = {h.fqdn for h in hosts}
+    root_set = {h.root_domain for h in hosts}
+    seen: dict[str, str] = {}
+
+    for host in hosts:
+        parts = host.fqdn.split(".")
+        root_parts = host.root_domain.split(".")
+        for i in range(1, len(parts) - len(root_parts)):
+            intermediate = ".".join(parts[i:])
+            if intermediate not in host_set and intermediate not in root_set:
+                seen.setdefault(intermediate, host.root_domain)
+
+    return sorted(seen.items(), key=lambda item: item[0].count("."))
+
+
 def _find_parent(fqdn: str, created_by_fqdn: dict[str, Domain]) -> Domain | None:
     parts = fqdn.split(".")
     for idx in range(1, len(parts) - 1):
@@ -140,8 +160,32 @@ def seed_softbank_osint_data(path: Path = FIXTURE_PATH) -> dict[str, int]:
         created_by_fqdn[root_fqdn] = root_domain
         root_count += 1
 
+    all_hosts = list(iter_softbank_osint_hosts(path))
+
+    intermediate_count = 0
+    for intermediate_fqdn, root_fqdn in _collect_intermediates(all_hosts):
+        unit = units[root_fqdn]
+        parent = _find_parent(intermediate_fqdn, created_by_fqdn)
+        domain, _ = Domain.objects.update_or_create(
+            fqdn=intermediate_fqdn,
+            defaults={
+                "domain_type": Domain.TYPE_SUBDOMAIN,
+                "status": Domain.STATUS_ACTIVE,
+                "mgmt_category": Domain.CATEGORY_MANAGED,
+                "management_unit": unit,
+                "parent_domain": parent,
+                "company": company,
+                "brand": brand,
+                "purpose": "OSINT intermediate node (synthesized)",
+                "note": "OSINT intermediate node; auto-synthesized from host discovery",
+                "collected_at": _parse_collected_at(""),
+            },
+        )
+        created_by_fqdn[intermediate_fqdn] = domain
+        intermediate_count += 1
+
     host_count = 0
-    for host in sorted(iter_softbank_osint_hosts(path), key=lambda item: (_label_count(item.fqdn), item.fqdn)):
+    for host in sorted(all_hosts, key=lambda item: (_label_count(item.fqdn), item.fqdn)):
         unit = units[host.root_domain]
         parent = _find_parent(host.fqdn, created_by_fqdn)
         domain, _ = Domain.objects.update_or_create(
@@ -162,4 +206,9 @@ def seed_softbank_osint_data(path: Path = FIXTURE_PATH) -> dict[str, int]:
         created_by_fqdn[host.fqdn] = domain
         host_count += 1
 
-    return {"roots": root_count, "hosts": host_count, "total": root_count + host_count}
+    return {
+        "roots": root_count,
+        "intermediates": intermediate_count,
+        "hosts": host_count,
+        "total": root_count + intermediate_count + host_count,
+    }

@@ -138,6 +138,7 @@
 | id | UUID | ○ | 一意識別子（PK） |
 | unit_type | VARCHAR(20) | ○ | 単位種別。`registered_domain` / `dns_zone` / `subdomain_namespace` |
 | unit_name | VARCHAR(255) | ○ | 管理単位名（対象の登録ドメイン・ゾーン・名前空間） |
+| fqdn_reversed | VARCHAR(255) | — | `unit_name` のラベルを逆順にした値（例: `jp.co.example`）。ツリー表示ソートおよびサブドメイン範囲検索に使用。保存時に自動計算・編集不可 |
 | parent_unit_id | UUID | — | 上位管理単位（FK → management_units.id）。継承解決に使用 |
 | setting_type | VARCHAR(20) | ○ | 管理情報設定区分。`individual` / `inherited` / `provisional` |
 | inherited_from_unit_id | UUID | — | 継承元管理単位（FK → management_units.id）。`inherited` 時に設定 |
@@ -164,6 +165,7 @@
 |-----------|-----|------|------|
 | id | UUID | ○ | 一意識別子（PK） |
 | fqdn | VARCHAR(255) | ○ | 完全修飾ドメイン名（UNIQUE） |
+| fqdn_reversed | VARCHAR(255) | — | `fqdn` のラベルを逆順にした値（例: `jp.co.example`）。ツリー表示ソートおよびサブドメイン範囲検索に使用。保存時に自動計算・編集不可 |
 | domain_type | VARCHAR(20) | ○ | 種別。`gtld` / `cctld` / `subdomain` |
 | status | VARCHAR(20) | ○ | `active` / `pending` / `expired` / `deleted` |
 | mgmt_category | VARCHAR(20) | ○ | 管理区分。`managed`（管理対象）/ `individual`（個別管理対象） |
@@ -486,6 +488,7 @@
 |------------|----------|------|
 | PK | id | 主キー |
 | UQ_domains_fqdn | fqdn | FQDN 一意制約 |
+| IDX_domains_fqdn_reversed | fqdn_reversed | ツリー表示ソート・サブドメイン範囲検索 |
 | IDX_domains_unit | management_unit_id | 管理単位別検索 |
 | IDX_domains_parent | parent_domain_id | サブドメイン階層検索 |
 | IDX_domains_status | status | ステータス別フィルター・バッチ |
@@ -497,6 +500,7 @@
 | インデックス | 対象カラム | 用途 |
 |------------|----------|------|
 | PK | id | 主キー |
+| IDX_unit_fqdn_reversed | fqdn_reversed | ツリー表示ソート・サブドメイン範囲検索 |
 | IDX_unit_parent | parent_unit_id | 継承解決 |
 | IDX_unit_dept | mgmt_dept_code | 管理責任部署別検索（参照範囲制御） |
 | IDX_unit_nextcheck | next_check_at | 棚卸期限検出（B08） |

@@ -22,20 +22,33 @@ def test_load_softbank_osint_fixture_counts():
 def test_seed_softbank_osint_data_creates_roots_hosts_and_parent_links():
     result = seed_softbank_osint_data()
 
-    assert result == {"roots": 3, "hosts": 969, "total": 972}
+    assert result["roots"] == 3
+    assert result["hosts"] == 969
+    assert result["intermediates"] > 0
+    assert result["total"] == result["roots"] + result["intermediates"] + result["hosts"]
     assert ManagementUnit.objects.filter(unit_name__in=["softbank.co.jp", "softbank.jp", "softbank.ne.jp"]).count() == 3
-    assert Domain.objects.filter(brand_id="B900").count() == 972
+    assert Domain.objects.filter(brand_id="B900").count() == result["total"]
 
-    root = Domain.objects.get(fqdn="softbank.co.jp")
+    # intermediate node for ai.softbank.co.jp is synthesized
+    intermediate = Domain.objects.get(fqdn="ai.softbank.co.jp")
+    assert intermediate.parent_domain.fqdn == "softbank.co.jp"
+
+    # datarobot.ai.softbank.co.jp now hangs under the synthesized intermediate
     child = Domain.objects.get(fqdn="datarobot.ai.softbank.co.jp")
-    assert child.parent_domain == root
+    assert child.parent_domain.fqdn == "ai.softbank.co.jp"
     assert child.note == "OSINT test data; sources=otx"
     assert child.management_unit.unit_name == "softbank.co.jp"
+
+    # bb.softbank.co.jp is synthesized; its children are grouped under it
+    bb = Domain.objects.get(fqdn="bb.softbank.co.jp")
+    assert bb.parent_domain.fqdn == "softbank.co.jp"
+    assert Domain.objects.get(fqdn="m1.bb.softbank.co.jp").parent_domain.fqdn == "bb.softbank.co.jp"
 
 
 @pytest.mark.django_db
 def test_seed_softbank_osint_data_is_idempotent():
-    seed_softbank_osint_data()
-    seed_softbank_osint_data()
+    result1 = seed_softbank_osint_data()
+    result2 = seed_softbank_osint_data()
 
-    assert Domain.objects.filter(brand_id="B900").count() == 972
+    assert result1 == result2
+    assert Domain.objects.filter(brand_id="B900").count() == result1["total"]
