@@ -109,7 +109,7 @@
     if (!item || !item.dataset.panelUrl || !drawer) return Promise.resolve();
     return fetch(item.dataset.panelUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(response => response.text())
-      .then(html => { drawer.innerHTML = html; });
+      .then(html => { drawer.innerHTML = html; if (typeof htmx !== 'undefined') htmx.process(drawer); });
   }
 
   function removeTreeColumnsRightOf(depth) {
