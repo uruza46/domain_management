@@ -16,7 +16,7 @@
   .chip.active{background:#1e293b;color:#fff;border-color:#1e293b}
   .ledger-row:hover{background:#f9fafb}
   .ledger-row.is-selected{background:#e0edff;outline:2px solid #3b82f6;outline-offset:-2px}
-  .ledger-grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;flex:1 1 0;min-height:0;overflow:hidden}
+  .ledger-grid{display:grid;grid-template-columns:minmax(0,1fr) 6px var(--panel-width,360px);gap:0;flex:1 1 0;min-height:0;overflow:hidden}
   .drawer-card{background:#fff;border:1px solid #e5e7eb;border-radius:8px;min-height:0}
   .miller{display:flex;overflow-x:auto;min-height:640px}
   .miller .col{min-width:260px;max-width:260px;border-right:1px solid #eef0f3}
@@ -46,6 +46,16 @@
   .ledger-body .miller { min-height: 0; }
   .ledger-scroll-left  { overflow-y: auto; height: 100%; }
   .ledger-scroll-right { overflow-y: auto; height: 100%; }
+  .panel-resize-handle {
+    cursor: col-resize;
+    background: transparent;
+    position: relative;
+    z-index: 10;
+  }
+  .panel-resize-handle:hover,
+  .panel-resize-handle.is-dragging {
+    background: #e0e7ff;
+  }
 </style>
 
 <div class="ledger-body">
@@ -89,6 +99,7 @@
       <div id="list-region">{% include "domains/_list.html" %}</div>
     {% endif %}
   </div>
+  <div class="panel-resize-handle" id="panel-resize-handle"></div>
   <div class="drawer-card ledger-scroll-right p-3" id="drawer">
     {% if panel %}{% include "domains/_panel.html" %}{% else %}<div class="text-muted text-center py-5">ドメインを選択してください</div>{% endif %}
   </div>
@@ -204,6 +215,39 @@
 
   const initial = selectableItems()[0];
   if (initial) selectItem(initial, { expand: false, focus: false, panel: false });
+})();
+
+(() => {
+  const STORAGE_KEY = 'domain-ledger-panel-width';
+  const MIN = 240, MAX = 640, DEFAULT = 360;
+  const grid = document.getElementById('ledger-grid');
+  const handle = document.getElementById('panel-resize-handle');
+  if (!grid || !handle) return;
+
+  function setWidth(w) {
+    const clamped = Math.max(MIN, Math.min(MAX, w));
+    grid.style.setProperty('--panel-width', clamped + 'px');
+    return clamped;
+  }
+
+  const saved = parseInt(localStorage.getItem(STORAGE_KEY), 10);
+  if (!isNaN(saved)) setWidth(saved);
+
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    handle.classList.add('is-dragging');
+    function onMove(e) {
+      setWidth(grid.getBoundingClientRect().right - e.clientX);
+    }
+    function onUp(e) {
+      handle.classList.remove('is-dragging');
+      localStorage.setItem(STORAGE_KEY, setWidth(grid.getBoundingClientRect().right - e.clientX));
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
 })();
 </script>
 {% endblock %}
