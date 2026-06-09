@@ -22,6 +22,42 @@ from .services import (
 )
 
 
+# Second-level domains under ccTLDs that behave as TLDs — never synthesize these.
+_PUBLIC_SLDS = frozenset({
+    "co.jp", "ne.jp", "or.jp", "ac.jp", "go.jp", "ed.jp", "gr.jp", "ad.jp",
+    "co.uk", "me.uk", "org.uk", "net.uk",
+    "com.au", "net.au", "org.au",
+    "co.nz", "net.nz", "co.kr", "or.kr",
+})
+
+
+def _min_ancestor_labels(fqdn: str) -> int:
+    """Minimum label count an ancestor must have to be a synthesisable domain (not a TLD)."""
+    parts = fqdn.split(".")
+    if len(parts) >= 2 and f"{parts[-2]}.{parts[-1]}" in _PUBLIC_SLDS:
+        return 3
+    return 2
+
+
+def _synthetic_ancestors(fqdns: list[str]) -> list[str]:
+    """Return ancestor FQDNs that are missing from both the batch and the DB."""
+    batch = set(fqdns)
+    candidates: set[str] = set()
+    for fqdn in fqdns:
+        parts = fqdn.split(".")
+        min_labels = _min_ancestor_labels(fqdn)
+        for idx in range(1, len(parts) - 1):
+            ancestor = ".".join(parts[idx:])
+            if ancestor.count(".") + 1 < min_labels:
+                break
+            if ancestor not in batch:
+                candidates.add(ancestor)
+    if not candidates:
+        return []
+    existing = set(Domain.objects.filter(fqdn__in=candidates).values_list("fqdn", flat=True))
+    return [c for c in candidates if c not in existing]
+
+
 def _find_import_parent(fqdn: str, created_by_fqdn: dict) -> "Domain | None":
     parts = fqdn.split(".")
     for idx in range(1, len(parts) - 1):
@@ -149,10 +185,13 @@ def import_commit(request):
         messages.error(request, "登録先の管理単位がありません")
         return redirect("import_form")
 
-    create_items = sorted(
-        [item for item in raw_results if item["action"] == "create"],
-        key=lambda item: item["fqdn"].count("."),
-    )
+    create_items = [item for item in raw_results if item["action"] == "create"]
+
+    if file_type != "zone":
+        for ancestor_fqdn in _synthetic_ancestors([i["fqdn"] for i in create_items]):
+            create_items.append({"fqdn": ancestor_fqdn, "action": "create", "extra": {}})
+
+    create_items.sort(key=lambda item: item["fqdn"].count("."))
 
     created_by_fqdn: dict = {}
     created_count = 0

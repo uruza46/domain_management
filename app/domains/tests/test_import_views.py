@@ -150,3 +150,47 @@ def test_import_commit_text_links_to_existing_db_parent(logged_in_client):
 
     child = Domain.objects.get(fqdn="sub.example.co.jp")
     assert child.parent_domain == parent
+
+
+@pytest.mark.django_db
+def test_import_commit_text_synthesizes_missing_root(logged_in_client):
+    """Importing sub.example.com without example.com should auto-create example.com."""
+    from domains.models import Domain
+    from owners.models import ManagementUnit
+    ManagementUnit.objects.create(
+        unit_name="default",
+        unit_type=ManagementUnit.UNIT_REGISTERED_DOMAIN,
+        setting_type=ManagementUnit.SETTING_INDIVIDUAL,
+    )
+    logged_in_client.post(
+        "/domains/import/preview/",
+        {"file_type": "text", "text_input": "sub.example.com\n"},
+        HTTP_HX_REQUEST="true",
+    )
+    logged_in_client.post("/domains/import/commit/")
+
+    root = Domain.objects.filter(fqdn="example.com").first()
+    assert root is not None, "example.com should have been synthesized"
+    child = Domain.objects.get(fqdn="sub.example.com")
+    assert child.parent_domain == root
+
+
+@pytest.mark.django_db
+def test_import_commit_text_does_not_synthesize_public_sld(logged_in_client):
+    """Importing sub.example.co.jp should synthesize example.co.jp but NOT co.jp."""
+    from domains.models import Domain
+    from owners.models import ManagementUnit
+    ManagementUnit.objects.create(
+        unit_name="default",
+        unit_type=ManagementUnit.UNIT_REGISTERED_DOMAIN,
+        setting_type=ManagementUnit.SETTING_INDIVIDUAL,
+    )
+    logged_in_client.post(
+        "/domains/import/preview/",
+        {"file_type": "text", "text_input": "sub.example.co.jp\n"},
+        HTTP_HX_REQUEST="true",
+    )
+    logged_in_client.post("/domains/import/commit/")
+
+    assert Domain.objects.filter(fqdn="example.co.jp").exists()
+    assert not Domain.objects.filter(fqdn="co.jp").exists()
