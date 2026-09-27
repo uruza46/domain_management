@@ -1,0 +1,19 @@
+region              = "ap-northeast-1"
+prefix              = "dm"
+db_password         = "CHANGE_ME_STRONG_PASSWORD"
+django_secret_key   = "CHANGE_ME_LONG_RANDOM_STRING"
+allowed_hosts       = "your-domain.example.com"
+acm_certificate_arn = ""  # 空文字 = HTTP のみ。本番では ACM ARN を設定
+
+# アプリへのアクセスを許可するIP（ALB）
+# 未指定時は 0.0.0.0/0（全公開）なので本番では必ず設定すること
+allowed_cidr_blocks = ["203.0.113.0/32"]  # 例: オフィスのグローバルIP
+
+# Terraform / AWS CLI 操作を許可するIP（IAM ポリシー）
+deploy_allowed_cidr_blocks = ["203.0.113.0/32"]  # 通常は allowed_cidr_blocks と同じでOK
+
+# CloudFront 停止フラグ（true: 有効, false: 503を返して閉じる）
+cloudfront_enabled = true
+
+# CloudFront オリジン ALB DNS 名（ECS 再作成後に terraform output alb_dns_name で更新）
+alb_dns_for_cf = "dm-alb-XXXX.ap-northeast-1.elb.amazonaws.com"

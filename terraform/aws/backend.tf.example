@@ -1,0 +1,12 @@
+# terraform init 後に backend.tf にリネームして使用
+# S3 バケットと DynamoDB テーブルは terraform apply で先に作成しておくこと
+
+terraform {
+  backend "s3" {
+    bucket         = "dm-tfstate"
+    key            = "aws/terraform.tfstate"
+    region         = "ap-northeast-1"
+    dynamodb_table = "dm-tflock"
+    encrypt        = true
+  }
+}

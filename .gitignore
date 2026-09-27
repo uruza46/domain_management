@@ -21,3 +21,13 @@ venv/
 Thumbs.db
 
 .superpowers/
+
+# Terraform
+terraform/.terraform/
+terraform/**/.terraform/
+terraform/**/*.tfstate
+terraform/**/*.tfstate.backup
+terraform/**/backend.tf
+terraform/**/terraform.tfvars
+!terraform/**/terraform.tfvars.example
+!terraform/**/backend.tf.example

@@ -26,9 +26,7 @@ services:
 
   cron:
     build: ./app
-    command: supercronic /app/crontab
-    volumes:
-      - ./app:/app
+    command: sh -c "supercronic /app/crontab"
     env_file: .env
     depends_on:
       db:

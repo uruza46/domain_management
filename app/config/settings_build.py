@@ -1,10 +1,7 @@
-from .settings import *  # noqa: F401,F403
+import os
+os.environ.setdefault('DJANGO_SECRET_KEY', 'build-time-dummy-key-not-used-in-production-xyzzy')
 
-DEBUG = False
-SECRET_KEY = "build-only-secret-key"
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "build.sqlite3",
-    }
-}
+from .settings import *
+
+DATABASES = {}
+
